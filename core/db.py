@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 DEFAULT_DB_PATH = Path("data/mastercontrol.db")
 
 
@@ -27,7 +27,7 @@ def init_db(db_path: str | Path = DEFAULT_DB_PATH) -> None:
                 value TEXT NOT NULL
             );
             INSERT OR IGNORE INTO settings (key, value)
-            VALUES ('schema_version', '2');
+            VALUES ('schema_version', '3');
 
             CREATE TABLE IF NOT EXISTS commands (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,7 +71,36 @@ def init_db(db_path: str | Path = DEFAULT_DB_PATH) -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 description TEXT NOT NULL,
                 status TEXT NOT NULL DEFAULT 'pending',
+                due_at TEXT,
+                sender TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS alert_rules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                rule_type TEXT NOT NULL,
+                name TEXT NOT NULL UNIQUE,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                config_json TEXT NOT NULL DEFAULT '{}',
+                daily_max INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS alert_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                rule_id INTEGER,
+                dedupe_key TEXT NOT NULL,
+                level TEXT NOT NULL,
+                title TEXT NOT NULL,
+                message TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'active',
+                first_seen TEXT NOT NULL,
+                last_sent TEXT,
+                repeat_count INTEGER NOT NULL DEFAULT 0,
+                acknowledged_at TEXT,
+                snoozed_until TEXT,
+                cooldown_until TEXT,
+                event_date TEXT NOT NULL,
+                FOREIGN KEY (rule_id) REFERENCES alert_rules(id)
             );
             CREATE TABLE IF NOT EXISTS ai_usage (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,6 +129,18 @@ def init_db(db_path: str | Path = DEFAULT_DB_PATH) -> None:
             )
             connection.execute(
                 "UPDATE settings SET value = '2' WHERE key = 'schema_version'"
+            )
+        if current_version < 3:
+            task_columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(tasks)").fetchall()
+            }
+            if "due_at" not in task_columns:
+                connection.execute("ALTER TABLE tasks ADD COLUMN due_at TEXT")
+            if "sender" not in task_columns:
+                connection.execute("ALTER TABLE tasks ADD COLUMN sender TEXT")
+            connection.execute(
+                "UPDATE settings SET value = '3' WHERE key = 'schema_version'"
             )
         else:
             connection.execute(

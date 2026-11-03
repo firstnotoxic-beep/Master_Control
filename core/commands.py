@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from core.alerts import AlertEngine, set_alert_setting
 from core.approval import create_approval
 from core.db import DEFAULT_DB_PATH, execute, fetch_all, init_db
 from core.modes import ModeConfigError, plan_mode
@@ -24,10 +25,44 @@ def handle_command(
     if lowered == "status":
         action, details = "status", "อ่านสถานะระบบ"
         result["message"] = "ระบบพร้อมทำงาน"
+    elif lowered == "alerts status":
+        action, details = "alerts_status", "แสดง alert ที่ยัง active"
+        alerts = [dict(item) for item in AlertEngine(db_path).active_events()]
+        result["alerts"] = alerts
+        result["message"] = f"มี alert ที่ยัง active {len(alerts)} รายการ"
+    elif lowered.startswith("snooze "):
+        parts = lowered.split()
+        if len(parts) != 3 or not parts[1].isdigit() or not parts[2].isdigit():
+            return {"ok": False, "action": "snooze_alert", "message": "ใช้ snooze <alert_id> <15|30|60>"}
+        try:
+            AlertEngine(db_path).snooze(int(parts[1]), int(parts[2]))
+        except ValueError as error:
+            return {"ok": False, "action": "snooze_alert", "message": str(error)}
+        action, details = "snooze_alert", f"alert_id={parts[1]}, minutes={parts[2]}"
+        result["message"] = "เลื่อนการแจ้งเตือนแล้ว"
+    elif lowered.startswith("ack "):
+        alert_id = lowered[4:].strip()
+        if not alert_id.isdigit():
+            return {"ok": False, "action": "ack_alert", "message": "ใช้ ack <alert_id>"}
+        AlertEngine(db_path).acknowledge(int(alert_id))
+        action, details = "ack_alert", f"alert_id={alert_id}"
+        result["message"] = "รับทราบการแจ้งเตือนแล้ว"
+    elif lowered in {"vacation on", "vacation off"}:
+        value = "on" if lowered.endswith("on") else "off"
+        set_alert_setting("vacation_mode", value, db_path)
+        action, details = "vacation_mode", value
+        result["message"] = f"Vacation Mode: {value}"
+    elif lowered == "skip bedtime":
+        from datetime import date
+
+        set_alert_setting("skip_bedtime", date.today().isoformat(), db_path)
+        action, details = "skip_bedtime", date.today().isoformat()
+        result["message"] = "ข้าม bedtime ของวันนี้แล้ว"
     elif lowered == "help":
         action, details = "help", "แสดงคำสั่งที่รองรับ"
         result["message"] = (
-            "status, help, add task <รายละเอียด>, list tasks, gaming mode, "
+            "status, alerts status, snooze <alert_id> <15|30|60>, ack <alert_id>, "
+            "vacation on/off, skip bedtime, add task <รายละเอียด>, list tasks, gaming mode, "
             "focus mode, mode status, restore mode [session_id], top processes"
         )
     elif lowered.startswith("add task "):

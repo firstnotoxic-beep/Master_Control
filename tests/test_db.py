@@ -8,5 +8,5 @@ def test_schema_and_settings(tmp_path):
     execute("INSERT INTO tasks (description) VALUES (?)", ("อ่านหนังสือ",), db_path)
     assert fetch_one(
         "SELECT value FROM settings WHERE key = 'schema_version'", db_path=db_path
-    )["value"] == "2"
+    )["value"] == "3"
     assert fetch_one("SELECT description FROM tasks", db_path=db_path)["description"] == "อ่านหนังสือ"

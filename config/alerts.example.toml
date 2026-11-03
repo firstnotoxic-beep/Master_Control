@@ -1,0 +1,26 @@
+# ตั้งค่ากฎแจ้งเตือนของ MasterControl (คัดลอกเป็น alerts.toml ก่อนใช้งาน)
+[bedtime]
+enabled = true
+time = "22:15"
+interval_minutes = 15
+max_repeats = 3
+
+[deadline]
+enabled = true
+normal_hours = 24
+warning_hours = 2
+critical_minutes = 30
+interval_minutes = 15
+daily_max = 20
+
+[vip]
+enabled = true
+keywords = ["urgent", "ด่วน"]
+senders = []
+interval_minutes = 15
+daily_max = 20
+
+[quiet_hours]
+enabled = true
+start = "23:00"
+end = "07:00"

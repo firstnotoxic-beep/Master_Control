@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from core.alerts import AlertEngine, acknowledge_alert, snooze_alert
 from core.approval import approve, cancel, pending
 from core.commands import handle_command
 from core.db import DEFAULT_DB_PATH, fetch_all, init_db
@@ -90,6 +91,29 @@ for item in pending(DEFAULT_DB_PATH):
 
 st.subheader("Task list")
 st.dataframe(fetch_all("SELECT * FROM tasks ORDER BY id DESC", db_path=DEFAULT_DB_PATH))
+
+st.subheader("Notification Center")
+alert_engine = AlertEngine(DEFAULT_DB_PATH)
+active_alerts = alert_engine.active_events()
+if not active_alerts:
+    st.info("ไม่มี alert ที่กำลังรอการจัดการ")
+for alert in active_alerts:
+    with st.container(border=True):
+        st.write(f"#{alert['id']} | {alert['level']} | {alert['title']}")
+        st.write(alert["message"])
+        ack_col, snooze_col = st.columns(2)
+        if ack_col.button("รับทราบ", key=f"alert-ack-{alert['id']}"):
+            acknowledge_alert(alert["id"], DEFAULT_DB_PATH)
+            st.rerun()
+        snooze_minutes = snooze_col.selectbox(
+            "เลื่อน",
+            [15, 30, 60],
+            key=f"alert-snooze-select-{alert['id']}",
+        )
+        if snooze_col.button("Snooze", key=f"alert-snooze-{alert['id']}"):
+            snooze_alert(alert["id"], snooze_minutes, DEFAULT_DB_PATH)
+            st.rerun()
+st.dataframe(alert_engine.history())
 
 st.subheader("Action Log")
 st.dataframe(
