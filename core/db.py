@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 DEFAULT_DB_PATH = Path("data/mastercontrol.db")
 
 
@@ -27,7 +27,7 @@ def init_db(db_path: str | Path = DEFAULT_DB_PATH) -> None:
                 value TEXT NOT NULL
             );
             INSERT OR IGNORE INTO settings (key, value)
-            VALUES ('schema_version', '1');
+            VALUES ('schema_version', '2');
 
             CREATE TABLE IF NOT EXISTS commands (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -81,6 +81,38 @@ def init_db(db_path: str | Path = DEFAULT_DB_PATH) -> None:
             );
             """
         )
+        current_version = int(
+            connection.execute(
+                "SELECT value FROM settings WHERE key = 'schema_version'"
+            ).fetchone()["value"]
+        )
+        if current_version < 2:
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS mode_sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    mode_name TEXT NOT NULL,
+                    closed_processes TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    status TEXT NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                "UPDATE settings SET value = '2' WHERE key = 'schema_version'"
+            )
+        else:
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS mode_sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    mode_name TEXT NOT NULL,
+                    closed_processes TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    status TEXT NOT NULL
+                )
+                """
+            )
 
 
 def execute(
