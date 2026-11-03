@@ -1,0 +1,19 @@
+# ตัวอย่าง config ของ mode; คัดลอกเป็น config/modes.toml ก่อนใช้งาน
+[protected]
+processes = [
+  "RobloxPlayerBeta.exe", "RobloxPlayerLauncher.exe", "EasyAntiCheat*",
+  "BEService*", "vgc.exe", "explorer.exe", "csrss.exe", "winlogon.exe",
+  "dwm.exe", "svchost.exe", "MsMpEng.exe", "Discord.exe", "nvidia*",
+  "nv*", "amd*", "MSI Center*", "Dragon Center*"
+]
+
+[modes.gaming]
+closeable = ["Notepad.exe"]
+keep = []
+
+[modes.gaming.restore_path]
+Notepad.exe = "C:\\Windows\\System32\\notepad.exe"
+
+[modes.focus]
+closeable = []
+keep = []

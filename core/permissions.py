@@ -16,6 +16,11 @@ ACTION_RISK: dict[str, RiskLevel] = {
     "add_task": RiskLevel.LOW,
     "list_tasks": RiskLevel.SAFE,
     "test_medium": RiskLevel.MEDIUM,
+    "gaming_mode": RiskLevel.MEDIUM,
+    "focus_mode": RiskLevel.MEDIUM,
+    "restore_mode": RiskLevel.MEDIUM,
+    "mode_status": RiskLevel.SAFE,
+    "top_processes": RiskLevel.SAFE,
 }
 
 
