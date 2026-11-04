@@ -53,6 +53,7 @@ def test_disabled_skill_never_loads(tmp_path):
     (folder / "skill.py").write_text("raise RuntimeError('must not import')", encoding="utf-8")
     registry = SkillRegistry(root, tmp_path / "config" / "skills.toml", tmp_path / "db.sqlite")
     assert "quiet" not in registry._loaded
+    assert "mastercontrol_skill_quiet" not in sys.modules
     assert not registry.list_skills()[0]["enabled"]
 
 
