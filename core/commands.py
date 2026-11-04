@@ -8,7 +8,7 @@ from core.alerts import AlertEngine, set_alert_setting
 from core.approval import create_approval
 from core.db import DEFAULT_DB_PATH, execute, fetch_all, init_db
 from core.modes import ModeConfigError, plan_mode
-from core.permissions import risk_for_action
+from core.permissions import requires_approval, risk_for_action
 
 
 def handle_command(
@@ -156,7 +156,7 @@ def handle_command(
             return {"ok": enabled["ok"], "action": "skill_enable", "message": enabled["message"]}
         try:
             preview = registry.preview(skill_name)
-        except Exception as error:
+        except (FileNotFoundError, TypeError, ValueError) as error:
             return {"ok": False, "action": "skill_enable", "message": str(error)}
         summaries = [
             f"{item['id']}: capabilities={','.join(item['requested_capabilities']) or 'none'}, "
@@ -187,7 +187,7 @@ def handle_command(
         try:
             arguments = json.loads(argument_text) if separator and argument_text.strip() else {}
             if not isinstance(arguments, dict):
-                raise ValueError("args must be a JSON object")
+                raise TypeError("args must be a JSON object")
             registry = SkillRegistry(db_path=db_path)
             prepared = registry.prepare_action(skill_name, skill_action, arguments)
             if requires_approval(prepared.action_key):
@@ -204,7 +204,7 @@ def handle_command(
                     "message": f"Skill action awaits approval (#{approval_id})",
                 }
             return {"action": prepared.action_key, **registry.execute_action(prepared)}
-        except (ValueError, PermissionError, json.JSONDecodeError) as error:
+        except (TypeError, ValueError, PermissionError, json.JSONDecodeError) as error:
             return {"ok": False, "action": "skill_run", "message": str(error)}
     elif lowered == "skills":
         from core.skills import SkillRegistry

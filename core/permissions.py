@@ -1,6 +1,7 @@
 # Skill permission registry and capability risk floors.
 from enum import StrEnum
 
+
 class RiskLevel(StrEnum):
     SAFE = "SAFE"
     LOW = "LOW"

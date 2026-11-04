@@ -11,7 +11,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    create_model,
+    model_validator,
+)
 
 from core.db import DEFAULT_DB_PATH, execute, fetch_all, fetch_one, init_db
 from core.permissions import (
@@ -62,7 +69,7 @@ class SkillActionManifest(BaseModel):
     params: dict[str, str] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def validate_params(self) -> "SkillActionManifest":
+    def validate_params(self) -> SkillActionManifest:
         for field_name, field_type in self.params.items():
             if not _NAME_PATTERN.fullmatch(field_name):
                 raise ValueError(f"invalid parameter name: {field_name}")
@@ -81,7 +88,7 @@ class SkillManifest(BaseModel):
     actions: list[SkillActionManifest] = Field(min_length=1)
 
     @model_validator(mode="after")
-    def unique_action_ids(self) -> "SkillManifest":
+    def unique_action_ids(self) -> SkillManifest:
         ids = [action.id for action in self.actions]
         if len(ids) != len(set(ids)):
             raise ValueError("action ids must be unique")
@@ -228,9 +235,9 @@ class SkillRegistry:
             sys.modules.pop(module_name, None)
             raise
         if not callable(getattr(module, "run", None)):
-            raise ValueError("skill.py must define run(action_id, params)")
+            raise TypeError("skill.py must define run(action_id, params)")
         if not callable(getattr(module, "verify", None)):
-            raise ValueError("skill.py must define verify(action_id, params, result)")
+            raise TypeError("skill.py must define verify(action_id, params, result)")
         return module
 
     def refresh(self) -> None:
@@ -318,7 +325,14 @@ class SkillRegistry:
                         "last_error": self._errors.get(name) or row.get("last_error"),
                     }
                 )
-            except Exception as error:
+            except (
+                FileNotFoundError,
+                OSError,
+                TypeError,
+                ValueError,
+                ValidationError,
+                tomllib.TOMLDecodeError,
+            ) as error:
                 LOGGER.warning("Invalid skill manifest %s: %s", name, error)
                 items.append(
                     {
@@ -386,7 +400,7 @@ class SkillRegistry:
         if action is None:
             raise ValueError(f"unknown action: {skill_name}.{action_id}")
         if not isinstance(payload, dict):
-            raise ValueError("action arguments must be a JSON object")
+            raise TypeError("action arguments must be a JSON object")
         fields = {
             key: (_PARAM_TYPES[field_type], ...)
             for key, field_type in action.params.items()

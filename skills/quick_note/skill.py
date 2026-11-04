@@ -1,6 +1,6 @@
 # บันทึกโน้ต Markdown เฉพาะโฟลเดอร์ data/notes
-from pathlib import Path
 import re
+from pathlib import Path
 
 NOTES_ROOT = Path("data/notes")
 FILENAME = re.compile(r"^[A-Za-z0-9_-]{1,60}\.md$")
