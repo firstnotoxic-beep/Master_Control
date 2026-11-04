@@ -6,4 +6,5 @@ __pycache__/
 data/*.db
 config/modes.toml
 config/alerts.toml
+config/skills.toml
 .venv/
