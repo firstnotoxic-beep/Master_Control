@@ -16,6 +16,7 @@ from core.commands import handle_command
 from core.db import DEFAULT_DB_PATH, fetch_all, init_db
 from core.modes import apply_mode, restore_mode
 from core.telemetry import read_telemetry
+from core.skills import SkillRegistry, execute_approved_skill
 
 init_db(DEFAULT_DB_PATH)
 st.set_page_config(page_title="MasterControl", page_icon="🟢", layout="wide")
