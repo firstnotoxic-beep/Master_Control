@@ -65,6 +65,36 @@ if st.button("ส่งคำสั่ง") and command:
         st.error(result["message"])
 
 st.subheader("Skills Framework")
+skill_name_input = st.text_input("Skill name to manage", key="skill-name-input")
+preview_col, enable_col, disable_col = st.columns(3)
+if preview_col.button("Preview permissions") and skill_name_input:
+    preview_result = handle_command(f"skill enable {skill_name_input}", DEFAULT_DB_PATH)
+    if preview_result["ok"]:
+        st.session_state["skill_preview_name"] = skill_name_input
+        st.session_state["skill_preview"] = preview_result["preview"]
+        st.json(preview_result["preview"])
+    else:
+        st.error(preview_result["message"])
+if enable_col.button("Confirm enable") and skill_name_input:
+    if st.session_state.get("skill_preview_name") != skill_name_input:
+        st.warning("Preview this Skill first.")
+    else:
+        enable_result = handle_command(f"skill enable {skill_name_input} confirm", DEFAULT_DB_PATH)
+        st.write(enable_result["message"])
+        st.rerun()
+if disable_col.button("Disable") and skill_name_input:
+    disable_result = handle_command(f"skill disable {skill_name_input}", DEFAULT_DB_PATH)
+    st.write(disable_result["message"])
+    st.rerun()
+if "skill_preview" in st.session_state:
+    st.json(st.session_state["skill_preview"])
+st.dataframe(
+    fetch_all(
+        "SELECT name, enabled, version, last_error, updated_at FROM skill_state ORDER BY name",
+        db_path=DEFAULT_DB_PATH,
+    )
+)
+
 st.dataframe(
     fetch_all(
         "SELECT name, enabled, version, last_error, updated_at FROM skill_state ORDER BY name",
