@@ -171,6 +171,36 @@ def handle_command(
         skill_name = raw[len("skill disable "):].strip().lower()
         disabled = SkillRegistry(db_path=db_path).disable(skill_name)
         return {"ok": disabled["ok"], "action": "skill_disable", "message": disabled["message"]}
+    elif lowered.startswith("run "):
+        from core.skills import SkillRegistry
+
+        request = raw[4:].strip()
+        head, separator, argument_text = request.partition(" ")
+        if head.count(".") != 1:
+            return {"ok": False, "action": "skill_run", "message": "Use run <skill>.<action> [JSON args]"}
+        skill_name, skill_action = head.split(".", 1)
+        try:
+            arguments = json.loads(argument_text) if separator and argument_text.strip() else {}
+            if not isinstance(arguments, dict):
+                raise ValueError("args must be a JSON object")
+            registry = SkillRegistry(db_path=db_path)
+            prepared = registry.prepare_action(skill_name, skill_action, arguments)
+            if requires_approval(prepared.action_key):
+                approval_id = create_approval(
+                    prepared.action_key,
+                    prepared.approval_details(),
+                    prepared.risk.value,
+                    db_path,
+                )
+                return {
+                    "ok": True,
+                    "action": prepared.action_key,
+                    "approval_id": approval_id,
+                    "message": f"Skill action awaits approval (#{approval_id})",
+                }
+            return {"action": prepared.action_key, **registry.execute_action(prepared)}
+        except (ValueError, PermissionError, json.JSONDecodeError) as error:
+            return {"ok": False, "action": "skill_run", "message": str(error)}
     elif lowered == "skills":
         from core.skills import SkillRegistry
         registry = SkillRegistry(db_path=db_path)
