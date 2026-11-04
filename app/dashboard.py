@@ -65,6 +65,13 @@ if st.button("ส่งคำสั่ง") and command:
         st.error(result["message"])
 
 st.subheader("Skills Framework")
+st.dataframe(
+    fetch_all(
+        "SELECT name, enabled, version, last_error, updated_at FROM skill_state ORDER BY name",
+        db_path=DEFAULT_DB_PATH,
+    )
+)
+
 st.subheader("Pending Approvals")
 for item in pending(DEFAULT_DB_PATH):
     with st.container(border=True):
