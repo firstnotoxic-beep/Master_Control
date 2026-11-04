@@ -64,6 +64,7 @@ if st.button("ส่งคำสั่ง") and command:
     else:
         st.error(result["message"])
 
+st.subheader("Skills Framework")
 st.subheader("Pending Approvals")
 for item in pending(DEFAULT_DB_PATH):
     with st.container(border=True):
