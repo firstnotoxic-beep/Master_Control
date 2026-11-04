@@ -257,6 +257,11 @@ class SkillRegistry:
                 for action in manifest.actions:
                     action_key = f"skill.{name}.{action.id}"
                     final_risk = minimum_risk_for_capabilities(action.capabilities, action.risk)
+                    if final_risk != action.risk:
+                        LOGGER.warning(
+                            "Raised Skill action risk %s from %s to %s due to capabilities %s",
+                            action_key, action.risk.value, final_risk.value, action.capabilities,
+                        )
                     register_skill_action(action_key, final_risk)
                 self._set_state(name, True, manifest.version, None)
             except Exception as error:
