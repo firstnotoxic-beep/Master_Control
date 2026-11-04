@@ -3,6 +3,11 @@
 ## Constraint
 Owner cannot test on the target Windows machine for now. All results below are mock/sandbox only unless marked VERIFIED.
 
+## CI
+- CI workflow exists at `.github/workflows/ci.yml`.
+- Runs on a GitHub-hosted Windows runner with Python 3.12 for pull requests and pushes to branches other than `main`.
+- Runs dependency installation, Ruff, and pytest. Tests use mocks only; CI does not verify behavior on the owner's Windows PC, which remains UNVERIFIED.
+
 ## Architecture changes since the original blueprint
 - Cloud-first free APIs (Groq -> Gemini -> GitHub Models) replace Local AI as default. Local AI (Ollama, 3B) is an optional plugin, off during gaming.
 - Auto-Boot via BIOS dropped (unsupported on most laptops). Morning SITREP runs at login.
