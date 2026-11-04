@@ -145,6 +145,32 @@ def handle_command(
         action, details = "top_processes", "แสดงโปรเซสที่ใช้ RAM สูงสุด"
         result["processes"] = top_processes()
         result["message"] = "แสดงโปรเซสที่ใช้ RAM สูงสุดแล้ว"
+    elif lowered.startswith("skill enable "):
+        from core.skills import SkillRegistry
+
+        skill_name = raw[len("skill enable "):].strip().lower()
+        try:
+            preview = SkillRegistry(db_path=db_path).preview(skill_name)
+        except Exception as error:
+            return {"ok": False, "action": "skill_enable", "message": str(error)}
+        summaries = [
+            f"{item['id']}: capabilities={','.join(item['requested_capabilities']) or 'none'}, "
+            f"risk={item['final_risk']}"
+            for item in preview["actions"]
+        ]
+        return {
+            "ok": True,
+            "action": "skill_enable_preview",
+            "preview": preview,
+            "message": "Review before enabling: " + " | ".join(summaries),
+            "confirmation_required": True,
+        }
+    elif lowered.startswith("skill disable "):
+        from core.skills import SkillRegistry
+
+        skill_name = raw[len("skill disable "):].strip().lower()
+        disabled = SkillRegistry(db_path=db_path).disable(skill_name)
+        return {"ok": disabled["ok"], "action": "skill_disable", "message": disabled["message"]}
     elif lowered == "skills":
         from core.skills import SkillRegistry
         registry = SkillRegistry(db_path=db_path)
