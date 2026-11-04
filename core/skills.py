@@ -13,7 +13,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model, model_validator
 
-from core.approval import create_approval
 from core.db import DEFAULT_DB_PATH, execute, fetch_all, fetch_one, init_db
 from core.permissions import (
     RiskLevel,
