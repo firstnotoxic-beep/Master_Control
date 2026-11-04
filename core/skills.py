@@ -235,8 +235,8 @@ class SkillRegistry:
 
     def refresh(self) -> None:
         for name in self._loaded:
-            unregister_skill_actions(f"skill.{name}.")
             sys.modules.pop(f"mastercontrol_skill_{name}", None)
+        unregister_skill_actions("skill.")
         self._loaded.clear()
         self._errors = {}
         enabled_names = set(self._enabled_names())
