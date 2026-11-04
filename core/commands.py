@@ -145,6 +145,10 @@ def handle_command(
         action, details = "top_processes", "แสดงโปรเซสที่ใช้ RAM สูงสุด"
         result["processes"] = top_processes()
         result["message"] = "แสดงโปรเซสที่ใช้ RAM สูงสุดแล้ว"
+    elif lowered == "skills":
+        from core.skills import SkillRegistry
+        registry = SkillRegistry(db_path=db_path)
+        return {"ok": True, "action": "skills", "skills": registry.list_skills(), "message": "Skill registry loaded"}
     else:
         return {
             "ok": False,
