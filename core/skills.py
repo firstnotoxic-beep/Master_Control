@@ -76,7 +76,7 @@ class SkillManifest(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     name: str = Field(pattern=r"^[a-z][a-z0-9_]{0,47}$")
-    version: str = Field(pattern=r"^\\d+\\.\\d+\\.\\d+$")
+    version: str = Field(pattern=r"^\d+\.\d+\.\d+$")
     description: str = Field(min_length=1, max_length=500)
     enabled_by_default: Literal[False] = Field(default=False, alias="enabled-by-default")
     actions: list[SkillActionManifest] = Field(min_length=1)
@@ -160,7 +160,7 @@ class SkillRegistry:
         lines = ["enabled = ["]
         lines.extend(f"  {json.dumps(name)}," for name in sorted(set(names)))
         lines.append("]")
-        self.config_path.write_text("\\n".join(lines) + "\\n", encoding="utf-8")
+        self.config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     def _skill_folders(self) -> dict[str, Path]:
         if not self.skills_dir.exists():
