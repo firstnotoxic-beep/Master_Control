@@ -148,9 +148,14 @@ def handle_command(
     elif lowered.startswith("skill enable "):
         from core.skills import SkillRegistry
 
-        skill_name = raw[len("skill enable "):].strip().lower()
+        skill_parts = raw.split()
+        skill_name = skill_parts[2].lower() if len(skill_parts) >= 3 else ""
+        registry = SkillRegistry(db_path=db_path)
+        if len(skill_parts) == 4 and skill_parts[3].lower() == "confirm":
+            enabled = registry.enable(skill_name)
+            return {"ok": enabled["ok"], "action": "skill_enable", "message": enabled["message"]}
         try:
-            preview = SkillRegistry(db_path=db_path).preview(skill_name)
+            preview = registry.preview(skill_name)
         except Exception as error:
             return {"ok": False, "action": "skill_enable", "message": str(error)}
         summaries = [
