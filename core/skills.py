@@ -334,7 +334,13 @@ class SkillRegistry:
         return items
 
     def enable(self, name: str) -> dict[str, Any]:
-        preview = self.preview(name)
+        try:
+            preview = self.preview(name)
+        except Exception as error:
+            message = str(error)[:1000]
+            LOGGER.exception("Cannot enable invalid Skill %s", name)
+            self._set_state(name, False, last_error=message)
+            return {"ok": False, "message": message, "preview": None}
         enabled_names = self._enabled_names()
         if name not in enabled_names:
             enabled_names.append(name)
