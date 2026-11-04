@@ -470,7 +470,7 @@ class SkillRegistry:
             skill_result = SkillResult.model_validate(raw_result)
             verified = False
             if skill_result.ok:
-                verified = bool(module.verify(prepared.action_id, prepared.params, skill_result))
+                verified = bool(module.verify(prepared.action_id, prepared.params, skill_result.model_dump()))
             final_result = SkillResult(
                 ok=skill_result.ok and verified,
                 message=skill_result.message if verified else (
