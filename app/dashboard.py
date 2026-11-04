@@ -81,6 +81,8 @@ for item in pending(DEFAULT_DB_PATH):
 
                 result = apply_mode(json.loads(item["details"]), DEFAULT_DB_PATH)
                 st.session_state["mode_result"] = result
+            elif item["action"].startswith("skill."):
+                st.session_state["skill_result"] = execute_approved_skill(item["id"], DEFAULT_DB_PATH)
             elif item["action"] == "restore_mode":
                 import json
 
