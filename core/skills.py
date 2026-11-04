@@ -78,7 +78,7 @@ class SkillManifest(BaseModel):
     name: str = Field(pattern=r"^[a-z][a-z0-9_]{0,47}$")
     version: str = Field(pattern=r"^\d+\.\d+\.\d+$")
     description: str = Field(min_length=1, max_length=500)
-    enabled_by_default: Literal[False] = Field(default=False, alias="enabled-by-default")
+    enabled_by_default: Literal[False] = Field(alias="enabled-by-default")
     actions: list[SkillActionManifest] = Field(min_length=1)
 
     @model_validator(mode="after")
