@@ -65,6 +65,8 @@ if st.button("ส่งคำสั่ง") and command:
         st.error(result["message"])
 
 st.subheader("Skills Framework")
+skill_registry = SkillRegistry(db_path=DEFAULT_DB_PATH)
+st.dataframe(skill_registry.list_skills())
 skill_name_input = st.text_input("Skill name to manage", key="skill-name-input")
 preview_col, enable_col, disable_col = st.columns(3)
 if preview_col.button("Preview permissions") and skill_name_input:
