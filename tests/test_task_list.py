@@ -96,16 +96,22 @@ def test_task_list_rejects_path_escape_and_symlinks(tmp_path, monkeypatch):
     assert registry is not None
 
 
-def test_task_list_invalid_input_fails_without_writing(tmp_path, monkeypatch):
+def test_task_list_rejects_invalid_description(tmp_path, monkeypatch):
     registry, module, _config = make_registry(tmp_path, monkeypatch)
 
     invalid_description = run_action(
         registry, "add", {"description": "first line\nsecond line"}
     )
+
     assert invalid_description["ok"] is False
     assert not (module.TASKS_ROOT / "tasks.md").exists()
 
+
+def test_task_list_rejects_invalid_task_id(tmp_path, monkeypatch):
+    registry, module, _config = make_registry(tmp_path, monkeypatch)
+
     invalid_id = run_action(registry, "done", {"task_id": 0})
+
     assert invalid_id["ok"] is False
     assert not (module.TASKS_ROOT / "tasks.md").exists()
 
