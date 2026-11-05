@@ -273,8 +273,14 @@ class SkillRegistry:
             except Exception as error:
                 message = str(error)[:1000]
                 LOGGER.exception("Skipping invalid skill %s", name)
+                self._loaded.pop(name, None)
+                unregister_skill_actions(f"skill.{name}.")
+                sys.modules.pop(f"mastercontrol_skill_{name}", None)
                 self._errors[name] = message
-                self._set_state(name, False, last_error=message)
+                try:
+                    self._set_state(name, False, last_error=message)
+                except Exception:
+                    LOGGER.exception("Could not persist failed Skill state for %s", name)
 
         for name in sorted(enabled_names - set(folders)):
             message = f"enabled skill folder does not exist: {name}"
@@ -347,14 +353,46 @@ class SkillRegistry:
                 )
         return items
 
+    def _write_failure_log(self, action: str, message: str, risk: str = "HIGH") -> None:
+        try:
+            execute(
+                """
+                INSERT INTO action_log (action, details, risk_level, status, actor)
+                VALUES (?, ?, ?, 'failed', 'skill')
+                """,
+                (action, json.dumps({"error": message[:1000]}), risk),
+                self.db_path,
+            )
+        except Exception:
+            LOGGER.exception("Could not persist Skill failure log for %s", action)
+
+    def _rollback_skill(self, name: str, version: str, message: str) -> None:
+        try:
+            enabled_names = self._enabled_names()
+            self._write_enabled_names([item for item in enabled_names if item != name])
+        except Exception:
+            LOGGER.exception("Could not remove failed Skill %s from enabled config", name)
+        self._loaded.pop(name, None)
+        unregister_skill_actions(f"skill.{name}.")
+        sys.modules.pop(f"mastercontrol_skill_{name}", None)
+        self._errors[name] = message[:1000]
+        try:
+            self._set_state(name, False, version, message[:1000])
+        except Exception:
+            LOGGER.exception("Could not persist disabled state for failed Skill %s", name)
+
     def enable(self, name: str) -> dict[str, Any]:
+        version = ""
         try:
             preview = self.preview(name)
+            version = preview["version"]
         except Exception as error:
             message = str(error)[:1000]
             LOGGER.exception("Cannot enable invalid Skill %s", name)
-            self._set_state(name, False, last_error=message)
+            self._rollback_skill(name, version, message)
+            self._write_failure_log(f"skill.{name}.enable", message)
             return {"ok": False, "message": message, "preview": None}
+
         enabled_names = self._enabled_names()
         if name not in enabled_names:
             enabled_names.append(name)
@@ -362,11 +400,10 @@ class SkillRegistry:
             self._write_enabled_names(enabled_names)
             self.refresh()
             if name not in self._loaded:
-                error = self._errors.get(name, "skill failed to load")
-                self._write_enabled_names([item for item in enabled_names if item != name])
-                self.refresh()
-                self._set_state(name, False, preview["version"], error)
-                return {"ok": False, "message": error, "preview": preview}
+                message = self._errors.get(name, "skill failed to load")
+                self._rollback_skill(name, version, message)
+                self._write_failure_log(f"skill.{name}.enable", message)
+                return {"ok": False, "message": message, "preview": preview}
             return {
                 "ok": True,
                 "message": f"Enabled skill: {name}",
@@ -375,19 +412,68 @@ class SkillRegistry:
         except Exception as error:
             message = str(error)[:1000]
             LOGGER.exception("Could not enable skill %s", name)
-            self._set_state(name, False, preview["version"], message)
+            self._rollback_skill(name, version, message)
+            self._write_failure_log(f"skill.{name}.enable", message)
             return {"ok": False, "message": message, "preview": preview}
 
-    def disable(self, name: str) -> dict[str, Any]:
+    @classmethod
+    def disable_without_loading(
+        cls,
+        name: str,
+        db_path: str | Path = DEFAULT_DB_PATH,
+        config_path: str | Path | None = None,
+    ) -> dict[str, Any]:
         if not _NAME_PATTERN.fullmatch(name):
             return {"ok": False, "message": "Invalid skill name"}
-        enabled_names = self._enabled_names()
-        self._write_enabled_names([item for item in enabled_names if item != name])
-        self._set_state(name, False)
-        self._loaded.pop(name, None)
+        config_file = Path(config_path or DEFAULT_CONFIG_PATH)
+        try:
+            init_db(db_path)
+            if config_file.exists():
+                with config_file.open("rb") as handle:
+                    config = tomllib.load(handle)
+                enabled_names = config.get("enabled", [])
+                if not isinstance(enabled_names, list) or any(
+                    not isinstance(item, str) or not _NAME_PATTERN.fullmatch(item)
+                    for item in enabled_names
+                ):
+                    raise ValueError("config/skills.toml must contain enabled = [skill names]")
+            else:
+                enabled_names = []
+            remaining = sorted({item for item in enabled_names if item != name})
+            config_file.parent.mkdir(parents=True, exist_ok=True)
+            lines = ["enabled = ["]
+            lines.extend(f"  {json.dumps(item)}," for item in remaining)
+            lines.append("]")
+            config_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            state = fetch_one(
+                "SELECT version FROM skill_state WHERE name = ?", (name,), db_path
+            )
+            version = state["version"] if state else ""
+            execute(
+                """
+                INSERT INTO skill_state (name, enabled, version, last_error, updated_at)
+                VALUES (?, 0, ?, NULL, CURRENT_TIMESTAMP)
+                ON CONFLICT(name) DO UPDATE SET
+                    enabled = 0,
+                    last_error = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (name, version),
+                db_path,
+            )
+        except (OSError, ValueError, tomllib.TOMLDecodeError) as error:
+            return {"ok": False, "message": str(error)}
         unregister_skill_actions(f"skill.{name}.")
         sys.modules.pop(f"mastercontrol_skill_{name}", None)
         return {"ok": True, "message": f"Disabled skill: {name}"}
+
+    def disable(self, name: str) -> dict[str, Any]:
+        result = self.disable_without_loading(
+            name, db_path=self.db_path, config_path=self.config_path
+        )
+        if result["ok"]:
+            self._loaded.pop(name, None)
+        return result
 
     def prepare_action(
         self, skill_name: str, action_id: str, payload: dict[str, Any]
@@ -430,6 +516,30 @@ class SkillRegistry:
     def execute_action(
         self, prepared: PreparedSkillAction, approval_id: int | None = None
     ) -> dict[str, Any]:
+        try:
+            if not isinstance(prepared.params, BaseModel):
+                raise TypeError("prepared parameters are invalid")
+            canonical = self.prepare_action(
+                prepared.skill_name,
+                prepared.action_id,
+                prepared.params.model_dump(mode="json"),
+            )
+            if (
+                prepared.action_key != canonical.action_key
+                or prepared.risk != canonical.risk
+                or prepared.capabilities != canonical.capabilities
+                or prepared.params.model_dump(mode="json")
+                != canonical.params.model_dump(mode="json")
+            ):
+                raise PermissionError("Prepared action does not match the active manifest")
+            prepared = canonical
+        except (AttributeError, TypeError, ValueError, PermissionError) as error:
+            return {
+                "ok": False,
+                "message": f"Prepared action rejected: {str(error)[:500]}",
+                "verified": False,
+            }
+
         if prepared.risk == RiskLevel.CRITICAL:
             result = SkillResult(ok=False, message="CRITICAL actions cannot be executed", verified=False)
             self._write_run_log(prepared, result, "refused", approval_id)
@@ -446,7 +556,8 @@ class SkillRegistry:
             approval = fetch_one(
                 """
                 SELECT approvals.status, action_log.id AS action_log_id,
-                       action_log.action, action_log.details, action_log.risk_level
+                       action_log.action, action_log.details, action_log.risk_level,
+                       action_log.status AS action_status
                 FROM approvals
                 JOIN action_log ON action_log.id = approvals.action_log_id
                 WHERE approvals.id = ?
@@ -457,6 +568,7 @@ class SkillRegistry:
             if (
                 approval is None
                 or approval["status"] != "approved"
+                or approval["action_status"] != "approved"
                 or approval["action"] != prepared.action_key
                 or approval["risk_level"] != prepared.risk.value
             ):
@@ -508,9 +620,17 @@ class SkillRegistry:
         except Exception as error:
             message = str(error)[:1000]
             LOGGER.exception("Skill action failed: %s", action_key)
-            self._set_state(prepared.skill_name, True, manifest.version, message)
-            result = SkillResult(ok=False, message=f"Skill action failed: {message}", verified=False)
-            self._write_run_log(prepared, result, "failed", approval_id)
+            self._rollback_skill(prepared.skill_name, manifest.version, message)
+            result = SkillResult(
+                ok=False,
+                message=f"Skill action failed: {message}",
+                verified=False,
+            )
+            try:
+                self._write_run_log(prepared, result, "failed", approval_id)
+            except Exception:
+                LOGGER.exception("Could not update the Skill action log: %s", action_key)
+                self._write_failure_log(action_key, message, prepared.risk.value)
             return result.model_dump()
 
     def _write_run_log(

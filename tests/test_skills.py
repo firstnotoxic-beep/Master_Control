@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from core.approval import approve, create_approval
-from core.db import fetch_one
+from core.db import execute, fetch_one
 from core.permissions import RiskLevel, minimum_risk_for_capabilities
 from core.skills import SkillRegistry
 
@@ -90,6 +90,50 @@ def test_medium_skill_requires_approval(tmp_path):
     assert result == {"ok": True, "message": "ok", "verified": True}
 
 
+
+def test_execute_revalidates_prepared_action_and_stored_approval(tmp_path):
+    root = tmp_path / "skills"
+    source = """
+def run(action_id, params):
+    raise AssertionError("untrusted action must not execute")
+
+def verify(action_id, params, result):
+    return False
+"""
+    make_skill(root, "secure", risk="MEDIUM", capabilities=["process_control"], body=source)
+    config = tmp_path / "skills.toml"
+    write_config(config, ["secure"])
+    db = tmp_path / "db.sqlite"
+    registry = SkillRegistry(root, config, db)
+    prepared = registry.prepare_action("secure", "go", {"value": "safe"})
+
+    forged = prepared.__class__(
+        skill_name=prepared.skill_name,
+        action_id=prepared.action_id,
+        action_key=prepared.action_key,
+        params=prepared.params,
+        risk=RiskLevel.SAFE,
+        capabilities=prepared.capabilities,
+    )
+    rejected = registry.execute_action(forged)
+    assert rejected["ok"] is False
+    assert "Prepared action rejected" in rejected["message"]
+
+    approval_id = create_approval(
+        prepared.action_key, prepared.approval_details(), prepared.risk.value, db
+    )
+    approve(approval_id, db_path=db)
+    execute(
+        "UPDATE action_log SET details = ? WHERE id = "
+        "(SELECT action_log_id FROM approvals WHERE id = ?)",
+        ('{"skill_name":"secure","action_id":"go","params":{"value":"tampered"}}',
+         approval_id),
+        db,
+    )
+    rejected = registry.execute_action(prepared, approval_id)
+    assert rejected["ok"] is False
+    assert "Approved parameters do not match" in rejected["message"]
+
 def test_skill_exception_is_caught_and_logged(tmp_path):
     root = tmp_path / "skills"
     source = """
@@ -110,6 +154,58 @@ def verify(action_id, params, result):
     assert fetch_one("SELECT status FROM action_log ORDER BY id DESC", db_path=db)["status"] == "failed"
 
 
+
+def test_failed_enable_rolls_back_config_module_state_and_logs(tmp_path):
+    root = tmp_path / "skills"
+    make_skill(root, "fails_enable", body="def run(:\n")
+    config = tmp_path / "skills.toml"
+    write_config(config, [])
+    db = tmp_path / "db.sqlite"
+    registry = SkillRegistry(root, config, db)
+
+    result = registry.enable("fails_enable")
+
+    assert result["ok"] is False
+    assert "fails_enable" not in config.read_text(encoding="utf-8")
+    assert "fails_enable" not in registry._loaded
+    assert "mastercontrol_skill_fails_enable" not in sys.modules
+    state = fetch_one(
+        "SELECT enabled FROM skill_state WHERE name = 'fails_enable'", db_path=db
+    )
+    assert state["enabled"] == 0
+    log = fetch_one(
+        "SELECT status FROM action_log WHERE action = 'skill.fails_enable.enable' "
+        "ORDER BY id DESC",
+        db_path=db,
+    )
+    assert log["status"] == "failed"
+
+
+def test_failed_run_disables_skill_and_keeps_failure_log(tmp_path):
+    root = tmp_path / "skills"
+    make_skill(root, "fails_run", body="def run(action_id, params):\n    return None\ndef verify(action_id, params, result):\n    return False\n")
+    config = tmp_path / "skills.toml"
+    write_config(config, ["fails_run"])
+    db = tmp_path / "db.sqlite"
+    registry = SkillRegistry(root, config, db)
+    prepared = registry.prepare_action("fails_run", "go", {"value": "x"})
+
+    result = registry.execute_action(prepared)
+
+    assert result["ok"] is False
+    assert "fails_run" not in config.read_text(encoding="utf-8")
+    assert "fails_run" not in registry._loaded
+    state = fetch_one(
+        "SELECT enabled FROM skill_state WHERE name = 'fails_run'", db_path=db
+    )
+    assert state["enabled"] == 0
+    log = fetch_one(
+        "SELECT status FROM action_log WHERE action = ? ORDER BY id DESC",
+        (prepared.action_key,),
+        db,
+    )
+    assert log["status"] == "failed"
+
 def test_quick_note_rejects_path_traversal(tmp_path, monkeypatch):
     from skills.quick_note import skill
 
@@ -119,6 +215,73 @@ def test_quick_note_rejects_path_traversal(tmp_path, monkeypatch):
     with pytest.raises(ValueError):
         skill._path("folder/note.md")
 
+
+
+def test_quick_note_rejects_symlink_and_writes_inside_notes_root(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from skills.quick_note import skill
+
+    notes = tmp_path / "notes"
+    outside = tmp_path / "outside.md"
+    outside.write_text("do not overwrite", encoding="utf-8")
+    monkeypatch.setattr(skill, "NOTES_ROOT", notes)
+    notes.mkdir()
+
+    link = notes / "linked.md"
+    try:
+        link.symlink_to(outside)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlink creation is unavailable on this runner")
+
+    with pytest.raises(ValueError, match="symbolic links"):
+        skill._path("linked.md")
+    with pytest.raises(ValueError, match="symbolic links"):
+        skill.run(
+            "save",
+            SimpleNamespace(filename="linked.md", title="bad", body="overwrite"),
+        )
+    assert outside.read_text(encoding="utf-8") == "do not overwrite"
+
+    result = skill.run(
+        "save",
+        SimpleNamespace(filename="safe.md", title="safe", body="inside"),
+    )
+    saved = notes / "safe.md"
+    assert result["ok"] is True
+    assert saved.resolve().is_relative_to(notes.resolve())
+    assert not saved.is_symlink()
+    assert saved.read_text(encoding="utf-8") == "# safe\n\ninside\n"
+
+
+def test_disable_command_does_not_import_enabled_skill(tmp_path, monkeypatch):
+    from core import skills
+    from core.commands import handle_command
+
+    root = tmp_path / "skills"
+    marker = tmp_path / "imported.txt"
+    source = (
+        "from pathlib import Path\n"
+        + f"Path({str(marker)!r}).write_text('imported', encoding='utf-8')\n"
+        + "def run(action_id, params): return {'ok': True, 'message': 'ok'}\n"
+        + "def verify(action_id, params, result): return True\n"
+    )
+    make_skill(root, "quiet_disable", body=source)
+    config = tmp_path / "config" / "skills.toml"
+    write_config(config, ["quiet_disable"])
+    db = tmp_path / "db.sqlite"
+    monkeypatch.setattr(skills, "DEFAULT_CONFIG_PATH", config)
+    skills.init_db(db)
+
+    result = handle_command("skill disable quiet_disable", db)
+
+    assert result["ok"] is True
+    assert not marker.exists()
+    assert "quiet_disable" not in config.read_text(encoding="utf-8")
+    state = fetch_one(
+        "SELECT enabled FROM skill_state WHERE name = 'quiet_disable'", db_path=db
+    )
+    assert state["enabled"] == 0
 
 def test_enable_persists_in_skill_state(tmp_path):
     root = tmp_path / "skills"
