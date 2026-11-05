@@ -25,3 +25,20 @@ replace the directory between checks and file creation. The final checks detect
 many substitutions but do not pin the directory identity for the entire operation;
 this is not an OS sandbox. Keep `data/` and `data/brain_dump/` writable only by
 the trusted user, and verify on the target Windows machine before marking VERIFIED.
+
+
+## daily_report file and data safety
+
+daily_report reads data/tasks/tasks.md, date-stamped Markdown notes under
+data/brain_dump/, and data/mastercontrol.db in SQLite read-only mode. It
+does not modify source files or database rows and does not include action-log
+details fields in the report. Source directories, files, the SQLite database,
+and the output directory/file are checked for symbolic links, junctions, Windows
+reparse points, and resolved-path escapes. Reports are written through a temporary
+file in data/reports/ and replaced atomically; the same date maps to one file.
+
+These portable path checks still cannot pin directory identity across every
+filesystem operation against a concurrent process that can modify data/.
+Keep the data directory writable only by the trusted user and verify on the target
+Windows machine; this Skill is not an OS sandbox. The Skill uses only
+file_read and file_write capabilities and has no network capability.
