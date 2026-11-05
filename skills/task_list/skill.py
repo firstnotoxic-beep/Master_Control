@@ -147,16 +147,22 @@ def run(action_id, params):
 
     tasks = _read_tasks()
     if action_id == "add":
-        description = _validate_description(params.description)
+        try:
+            description = _validate_description(params.description)
+        except ValueError as error:
+            return {"ok": False, "message": str(error), "verified": False}
         task_id = max((item["id"] for item in tasks), default=0) + 1
         tasks.append({"id": task_id, "done": False, "description": description})
         _write_tasks(tasks)
         return {"ok": True, "message": f"Added task #{task_id}: {description}", "verified": False}
 
-    task_id = _validate_task_id(params.task_id)
+    try:
+        task_id = _validate_task_id(params.task_id)
+    except ValueError as error:
+        return {"ok": False, "message": str(error), "verified": False}
     task = next((item for item in tasks if item["id"] == task_id), None)
     if task is None:
-        raise ValueError(f"task #{task_id} was not found")
+        return {"ok": False, "message": f"task #{task_id} was not found", "verified": False}
     if action_id == "done":
         task["done"] = True
         _write_tasks(tasks)
