@@ -1,60 +1,77 @@
 # MasterControl
 
-MasterControl คือระบบควบคุมและผู้ช่วยส่วนตัวสำหรับ **Windows 11** ที่ออกแบบให้ Core เป็นผู้ควบคุมการกระทำของระบบ ไม่ใช่ให้ AI สั่งเครื่องโดยตรง
+**MasterControl** คือระบบควบคุมและผู้ช่วยส่วนตัวบน Windows 11 และเป็นศูนย์ควบคุมหลักของ **The Grid** เป้าหมายคือให้ Core เป็นผู้กำกับการทำงานของระบบและ Agent แทนการปล่อยให้ AI หรือ Agent สั่งเครื่องได้โดยตรง
 
-## What is MasterControl?
+## The Grid and MasterControl
 
-- **AI proposes:** AI Provider (Phase 5, planned) จะเสนอ action ในรูปแบบข้อมูลที่มีโครงสร้างและตรวจสอบด้วย Pydantic เท่านั้น
-- **Core controls:** Core ตรวจ schema และ permission, ขอ approval เมื่อจำเป็น, ส่งให้ executor ทำงาน, ตรวจผลจริง และบันทึก action log
-- **Skills:** Skill เป็น Python code ที่ทำงานใน process เดียวกับ MasterControl ไม่ใช่ OS sandbox จึงต้องตรวจ source และเปิดใช้เฉพาะ Skill ที่เชื่อถือได้
+- **The Grid** คือระบบนิเวศทั้งหมด รวม MasterControl, Agent Runtime, เครื่องมือ และเครื่อง Windows ที่ได้รับอนุญาต
+- **MasterControl** คือ Control Plane และ Security Authority: รับคำสั่ง เลือกวิธีทำงาน กำหนดขอบเขต ตรวจสิทธิ์ และตรวจผลลัพธ์
+- **Agent Runtime** เป็นชั้นปฏิบัติงานที่อาจใช้ OpenClaw หรือทางเลือกอื่นได้ แต่ต้องผ่านการประเมินและ Decision Gate ก่อน ไม่ใช่ผู้มีอำนาจด้านความปลอดภัย
+- **Discord** เป็นช่องทางสื่อสาร รายงาน และ approval ที่แยกจาก Agent Runtime
 
-ลำดับความปลอดภัยคือ **validate → permission → approval (when required) → execute → verify → log** โดย action ระดับ MEDIUM ขึ้นไปต้องได้รับอนุมัติ และ CRITICAL ไม่สามารถทำงานได้
+## Security model
 
-## Current status
+ทุก action ต้องผ่านลำดับนี้:
 
-- **Phase 4 — Skill Framework:** code complete; GitHub Actions CI verified บน hosted Windows runner โดยใช้ mock tests เท่านั้น
-- **Windows verification:** ยัง pending ตาม [Issue #11](https://github.com/firstnotoxic-beep/Master_Control/issues/11) การผ่าน CI ไม่ได้ยืนยันการทำงานบนเครื่อง Windows 11 ของเจ้าของ
-- **Installed Skills:** `quick_note`, `task_list`, `brain_dump`, `daily_report` — ทุกตัวเป็น opt-in และปิดไว้โดยค่าเริ่มต้น ไม่มี Skill โหลดจนกว่าจะเปิดใน `config/skills.toml`
+`validate → permission → approval (when required) → execute → verify → log`
 
-## Getting started
+LLM และ Agent เสนอได้เฉพาะ structured data ที่ตรวจสอบได้ ไม่สามารถอนุมัติ action ให้ตัวเองหรือข้าม Security Core ได้ โดย MEDIUM+ ต้องได้รับ approval และ CRITICAL ถูกปฏิเสธ
 
-Quickstart coming soon. ดู dependencies และสถานะการพัฒนาจากไฟล์ที่ลิงก์ไว้ด้านล่างก่อนใช้งาน
+**Skill security:** Skills เป็น Python code ที่รันใน process เดียวกับ MasterControl ไม่ใช่ OS sandbox และ capability declarations ไม่ใช่การแยกสิทธิ์ระดับระบบปฏิบัติการ ต้องตรวจ source ก่อนเปิดใช้ และเปิดใช้แบบ opt-in เท่านั้น
 
-## Roadmap
+## Current repository status
 
-| Phase | Name | Key items | Status |
-|---|---|---|---|
-| 1 | Foundation | SQLite, permissions, approval, keyword commands, Windows Toast/Discord notifications, Streamlit dashboard | Done — mock verified; Windows checks pending |
-| 2 | System Intelligence | Read-only telemetry, top-process listing, Gaming/Focus Mode Engine, allowlisted process planning, approval-gated actions and restore sessions | Done — mock verified; Windows checks pending |
-| 3 | Alert Engine | Bedtime/deadline alerts, VIP rule hook, snooze/acknowledge, vacation/quiet hours, polling scheduler, Notification Center history | Done — mock verified; Windows checks pending |
-| 4 | Skill Framework | Opt-in loader, manifest validation, capability risk floors, command routing, approval dispatch, four example Skills | Code complete — Windows pending |
-| 4.5 | Reliability & Security | Self-diagnostic, action preview, audit timeline, config/error recovery, failure tests | Planned |
-| 5 | AI Provider Layer | Groq primary; Gemini/GitHub Models fallback; Pydantic action proposals; no private data sent to cloud without consent | Planned |
-| 6 | Discord Integration | Status/task commands, approve/cancel buttons, owner ID check | Planned |
-| 7 | Personal Productivity | Task engine, morning SITREP, voice via faster-whisper, knowledge search | Planned |
-| 8 | Gaming Assistant | Game profiles and session analytics; no anti-cheat interaction, game-process termination, or fan control | Planned |
-| 9 | Desktop Experience | Command palette, quick actions, system tray, privacy center | Planned |
-| 10 | Ecosystem | Local Skill marketplace, versioning, compatibility checks, config export/import | Planned |
+- **Phases 1–3:** ทำเสร็จใน mock tests; ยัง UNVERIFIED บน Windows เครื่องเจ้าของ
+- **Phase 4 — Skill Framework:** code complete และ CI verified; การตรวจบน Windows เครื่องเจ้าของยัง pending
+- **Phase 4.5:** เป็นลำดับงานถัดไปตามแผน — Reliability & Security
+- **Phases 5–10:** เป็นแผน ยังไม่ถือว่า implemented
 
-### Milestones
+CI ใช้ GitHub-hosted Windows runner, Python 3.12, Ruff และ pytest โดย tests ใช้ mocks เท่านั้น การผ่าน CI ไม่ได้ยืนยันการทำงานบนเครื่อง Windows 11 จริง ดูรายละเอียดและ checklist ได้ที่ [docs/STATUS.md](docs/STATUS.md)
 
-| Milestone | Phases | Goal |
+## Skills
+
+ตัวอย่าง Skills ใน repository:
+
+- `quick_note`
+- `task_list`
+- `brain_dump`
+- `daily_report`
+
+ทั้งหมดเป็น opt-in และปิดไว้โดยค่าเริ่มต้น จะโหลดได้เมื่อเจ้าของเปิดใช้ใน `config/skills.toml` เท่านั้น อ่าน [docs/SKILLS.md](docs/SKILLS.md) และ [docs/SECURITY.md](docs/SECURITY.md) ก่อนเปิดใช้ Skill ใด ๆ
+
+## Unified roadmap
+
+| Phase | Name | Status |
 |---|---|---|
-| A — Secure Foundation | 4 + 4.5 | Trusted, observable Skill execution and recovery |
-| B — Intelligent Assistant | 5 + 6 | AI proposals and controlled Discord interaction |
-| C — Personal Intelligence | 7 + 8 | Productivity and gaming context |
-| D — Complete Ecosystem | 9 + 10 | Desktop experience and extensible Skills |
+| 1–3 | Foundation, Telemetry/Mode Engine, Alert Engine | Done in mocks; Windows verification pending |
+| 4 | Skill Framework | Code complete; CI verified; Windows verification pending |
+| 4.5 | Reliability & Security | Planned next |
+| 5 | AI Provider & Intelligence (Provider, Budget Manager, L0–L3, AI Debate) | Planned |
+| 6 | Agent Manager & conditional OpenClaw Runtime Gate | Planned |
+| 7 | Discord Integration | Planned |
+| 8 | Proactive Intelligence (Task Engine, Morning SITREP, monitoring) | Planned |
+| 9 | The Grid Desktop Experience (tray, hotkey/overlay, file intelligence) | Planned |
+| 10 | Ecosystem & Maintenance | Planned |
 
-### Definition of done (each phase)
+รายละเอียดเป้าหมาย, exit criteria, Budget Manager, AI Debate และ OpenClaw Decision Gate อยู่ใน [docs/THE_GRID_MASTER_PLAN.md](docs/THE_GRID_MASTER_PLAN.md) ส่วนสถานะ implementation ที่มีผลจริงให้ยึด [docs/STATUS.md](docs/STATUS.md) เสมอ
 
-- `ruff check .` and `pytest -q` pass.
-- Failure-path tests cover relevant execution and recovery behavior.
-- No permission or approval requirement is weakened.
-- `docs/STATUS.md` is updated.
-- Mock/CI verification and real Windows-device verification are reported separately; mock results are never presented as Windows-verified.
+## Development and verification
 
-## Links
+Project baseline: Python 3.11+ (CI currently uses Python 3.12).
 
-- [Project status](docs/STATUS.md)
+```powershell
+python -m pip install -r requirements.txt
+ruff check .
+pytest -q
+```
+
+These commands install the repository dependencies and run the same lint/test checks used by CI. They do not replace the pending manual checks on the owner's Windows machine.
+
+## Project documents
+
+- [Project instructions](AGENTS.md)
+- [Implementation status and Windows checklist](docs/STATUS.md)
+- [The Grid unified master plan](docs/THE_GRID_MASTER_PLAN.md)
+- [Skill Framework guide](docs/SKILLS.md)
 - [Skill security notes](docs/SECURITY.md)
-- [Issues and verification work](https://github.com/firstnotoxic-beep/Master_Control/issues)
+- [Open issues and verification work](https://github.com/firstnotoxic-beep/Master_Control/issues)
