@@ -7,6 +7,7 @@ import logging
 import re
 import sys
 import tomllib
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -353,6 +354,20 @@ class SkillRegistry:
                 )
         return items
 
+    def _write_plain_failure_log(self, action: str, message: str) -> None:
+        log_path = Path("data/logs/skill-failures.log")
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        record = json.dumps(
+            {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "action": action,
+                "error": message[:2000],
+            },
+            ensure_ascii=False,
+        )
+        with log_path.open("a", encoding="utf-8") as log_file:
+            log_file.write(record + "\n")
+
     def _write_failure_log(self, action: str, message: str, risk: str = "HIGH") -> None:
         try:
             execute(
@@ -363,8 +378,35 @@ class SkillRegistry:
                 (action, json.dumps({"error": message[:1000]}), risk),
                 self.db_path,
             )
-        except Exception:
+        except Exception as error:
             LOGGER.exception("Could not persist Skill failure log for %s", action)
+            self._write_plain_failure_log(
+                action, f"Database action-log write failed: {error}; {message}"
+            )
+
+    def _disable_after_action_log_failure(self, name: str, message: str) -> None:
+        self._loaded.pop(name, None)
+        unregister_skill_actions(f"skill.{name}.")
+        sys.modules.pop(f"mastercontrol_skill_{name}", None)
+        self._errors[name] = message[:1000]
+        action = f"skill.{name}.action_log_failure"
+        try:
+            enabled_names = self._enabled_names()
+            if "<config>" in self._errors:
+                raise RuntimeError("could not read enabled Skills configuration")
+            self._write_enabled_names([item for item in enabled_names if item != name])
+        except Exception as error:
+            LOGGER.exception("Could not persist disabled config for Skill %s", name)
+            self._write_plain_failure_log(
+                action, f"Skill disabled in memory; config disable failed: {error}"
+            )
+        try:
+            self._set_state(name, False, last_error=message[:1000])
+        except Exception as error:
+            LOGGER.exception("Could not persist disabled DB state for Skill %s", name)
+            self._write_plain_failure_log(
+                action, f"Skill disabled in memory; DB state update failed: {error}"
+            )
 
     def _rollback_skill(self, name: str, version: str, message: str) -> None:
         try:
@@ -597,6 +639,27 @@ class SkillRegistry:
             return result.model_dump()
 
         try:
+            action_log_id = self._write_run_log(
+                prepared,
+                SkillResult(ok=False, message="Action execution started", verified=False),
+                "started",
+                approval_id,
+            )
+        except Exception as error:
+            message = str(error)[:1000]
+            LOGGER.exception("Blocking Skill action because its action log could not be written")
+            self._disable_after_action_log_failure(prepared.skill_name, message)
+            self._write_plain_failure_log(
+                action_key,
+                f"Execution blocked before Skill code ran because DB action-log write failed: {message}",
+            )
+            return {
+                "ok": False,
+                "message": "Action log could not be written; Skill was disabled and execution was blocked",
+                "verified": False,
+            }
+
+        try:
             raw_result = module.run(prepared.action_id, prepared.params)
             skill_result = SkillResult.model_validate(raw_result)
             verified = False
@@ -615,6 +678,7 @@ class SkillRegistry:
                 final_result,
                 "completed" if final_result.ok else "failed",
                 approval_id,
+                action_log_id=action_log_id,
             )
             return final_result.model_dump()
         except Exception as error:
@@ -627,7 +691,9 @@ class SkillRegistry:
                 verified=False,
             )
             try:
-                self._write_run_log(prepared, result, "failed", approval_id)
+                self._write_run_log(
+                    prepared, result, "failed", approval_id, action_log_id=action_log_id
+                )
             except Exception:
                 LOGGER.exception("Could not update the Skill action log: %s", action_key)
                 self._write_failure_log(action_key, message, prepared.risk.value)
@@ -639,7 +705,8 @@ class SkillRegistry:
         result: SkillResult,
         status: str,
         approval_id: int | None,
-    ) -> None:
+        action_log_id: int | None = None,
+    ) -> int:
         details = json.dumps(
             {
                 "skill_name": prepared.skill_name,
@@ -651,23 +718,25 @@ class SkillRegistry:
             ensure_ascii=False,
             sort_keys=True,
         )
-        if approval_id is not None:
+        if action_log_id is None and approval_id is not None:
             row = fetch_one(
                 "SELECT action_log_id FROM approvals WHERE id = ?",
                 (approval_id,),
                 self.db_path,
             )
             if row is not None:
-                execute(
-                    """
-                    UPDATE action_log SET details = ?, status = ?, actor = 'skill'
-                    WHERE id = ?
-                    """,
-                    (details, status, row["action_log_id"]),
-                    self.db_path,
-                )
-                return
-        execute(
+                action_log_id = int(row["action_log_id"])
+        if action_log_id is not None:
+            execute(
+                """
+                UPDATE action_log SET details = ?, status = ?, actor = 'skill'
+                WHERE id = ?
+                """,
+                (details, status, action_log_id),
+                self.db_path,
+            )
+            return action_log_id
+        return execute(
             """
             INSERT INTO action_log (action, details, risk_level, status, actor)
             VALUES (?, ?, ?, ?, 'skill')
