@@ -212,10 +212,10 @@ def test_action_log_failure_blocks_execution_and_disables_skill(tmp_path, monkey
     root = tmp_path / "skills"
     marker = tmp_path / "executed.txt"
     source = (
-        "from pathlib import Path\\n"
-        + f"Path({str(marker)!r}).write_text('ran', encoding='utf-8')\\n"
-        + "def run(action_id, params): return {'ok': True, 'message': 'ran'}\\n"
-        + "def verify(action_id, params, result): return True\\n"
+        "from pathlib import Path\n"
+        + f"Path({str(marker)!r}).write_text('ran', encoding='utf-8')\n"
+        + "def run(action_id, params): return {'ok': True, 'message': 'ran'}\n"
+        + "def verify(action_id, params, result): return True\n"
     )
     make_skill(root, "log_guard", body=source)
     config = tmp_path / "skills.toml"
@@ -310,7 +310,10 @@ def test_quick_note_rechecks_final_path_and_rejects_reparse_points(tmp_path, mon
             skill._path("junction.md")
 
     def replace_with_symlink(source, destination):
-        Path(destination).symlink_to(outside)
+        try:
+            Path(destination).symlink_to(outside)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlink creation is unavailable on this runner")
         Path(source).unlink()
 
     monkeypatch.setattr(skill.os, "replace", replace_with_symlink)
