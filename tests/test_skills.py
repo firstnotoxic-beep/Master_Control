@@ -154,6 +154,58 @@ def verify(action_id, params, result):
     assert fetch_one("SELECT status FROM action_log ORDER BY id DESC", db_path=db)["status"] == "failed"
 
 
+
+def test_failed_enable_rolls_back_config_module_state_and_logs(tmp_path):
+    root = tmp_path / "skills"
+    make_skill(root, "fails_enable", body="def run(:\\n")
+    config = tmp_path / "skills.toml"
+    write_config(config, [])
+    db = tmp_path / "db.sqlite"
+    registry = SkillRegistry(root, config, db)
+
+    result = registry.enable("fails_enable")
+
+    assert result["ok"] is False
+    assert "fails_enable" not in config.read_text(encoding="utf-8")
+    assert "fails_enable" not in registry._loaded
+    assert "mastercontrol_skill_fails_enable" not in sys.modules
+    state = fetch_one(
+        "SELECT enabled FROM skill_state WHERE name = 'fails_enable'", db_path=db
+    )
+    assert state["enabled"] == 0
+    log = fetch_one(
+        "SELECT status FROM action_log WHERE action = 'skill.fails_enable.enable' "
+        "ORDER BY id DESC",
+        db_path=db,
+    )
+    assert log["status"] == "failed"
+
+
+def test_failed_run_disables_skill_and_keeps_failure_log(tmp_path):
+    root = tmp_path / "skills"
+    make_skill(root, "fails_run", body="def run(action_id, params):\\n    return None\\n")
+    config = tmp_path / "skills.toml"
+    write_config(config, ["fails_run"])
+    db = tmp_path / "db.sqlite"
+    registry = SkillRegistry(root, config, db)
+    prepared = registry.prepare_action("fails_run", "go", {"value": "x"})
+
+    result = registry.execute_action(prepared)
+
+    assert result["ok"] is False
+    assert "fails_run" not in config.read_text(encoding="utf-8")
+    assert "fails_run" not in registry._loaded
+    state = fetch_one(
+        "SELECT enabled FROM skill_state WHERE name = 'fails_run'", db_path=db
+    )
+    assert state["enabled"] == 0
+    log = fetch_one(
+        "SELECT status FROM action_log WHERE action = ? ORDER BY id DESC",
+        (prepared.action_key,),
+        db,
+    )
+    assert log["status"] == "failed"
+
 def test_quick_note_rejects_path_traversal(tmp_path, monkeypatch):
     from skills.quick_note import skill
 

@@ -273,8 +273,14 @@ class SkillRegistry:
             except Exception as error:
                 message = str(error)[:1000]
                 LOGGER.exception("Skipping invalid skill %s", name)
+                self._loaded.pop(name, None)
+                unregister_skill_actions(f"skill.{name}.")
+                sys.modules.pop(f"mastercontrol_skill_{name}", None)
                 self._errors[name] = message
-                self._set_state(name, False, last_error=message)
+                try:
+                    self._set_state(name, False, last_error=message)
+                except Exception:
+                    LOGGER.exception("Could not persist failed Skill state for %s", name)
 
         for name in sorted(enabled_names - set(folders)):
             message = f"enabled skill folder does not exist: {name}"
@@ -347,14 +353,46 @@ class SkillRegistry:
                 )
         return items
 
+    def _write_failure_log(self, action: str, message: str, risk: str = "HIGH") -> None:
+        try:
+            execute(
+                """
+                INSERT INTO action_log (action, details, risk_level, status, actor)
+                VALUES (?, ?, ?, 'failed', 'skill')
+                """,
+                (action, json.dumps({"error": message[:1000]}), risk),
+                self.db_path,
+            )
+        except Exception:
+            LOGGER.exception("Could not persist Skill failure log for %s", action)
+
+    def _rollback_skill(self, name: str, version: str, message: str) -> None:
+        try:
+            enabled_names = self._enabled_names()
+            self._write_enabled_names([item for item in enabled_names if item != name])
+        except Exception:
+            LOGGER.exception("Could not remove failed Skill %s from enabled config", name)
+        self._loaded.pop(name, None)
+        unregister_skill_actions(f"skill.{name}.")
+        sys.modules.pop(f"mastercontrol_skill_{name}", None)
+        self._errors[name] = message[:1000]
+        try:
+            self._set_state(name, False, version, message[:1000])
+        except Exception:
+            LOGGER.exception("Could not persist disabled state for failed Skill %s", name)
+
     def enable(self, name: str) -> dict[str, Any]:
+        version = ""
         try:
             preview = self.preview(name)
+            version = preview["version"]
         except Exception as error:
             message = str(error)[:1000]
             LOGGER.exception("Cannot enable invalid Skill %s", name)
-            self._set_state(name, False, last_error=message)
+            self._rollback_skill(name, version, message)
+            self._write_failure_log(f"skill.{name}.enable", message)
             return {"ok": False, "message": message, "preview": None}
+
         enabled_names = self._enabled_names()
         if name not in enabled_names:
             enabled_names.append(name)
@@ -362,11 +400,10 @@ class SkillRegistry:
             self._write_enabled_names(enabled_names)
             self.refresh()
             if name not in self._loaded:
-                error = self._errors.get(name, "skill failed to load")
-                self._write_enabled_names([item for item in enabled_names if item != name])
-                self.refresh()
-                self._set_state(name, False, preview["version"], error)
-                return {"ok": False, "message": error, "preview": preview}
+                message = self._errors.get(name, "skill failed to load")
+                self._rollback_skill(name, version, message)
+                self._write_failure_log(f"skill.{name}.enable", message)
+                return {"ok": False, "message": message, "preview": preview}
             return {
                 "ok": True,
                 "message": f"Enabled skill: {name}",
@@ -375,7 +412,8 @@ class SkillRegistry:
         except Exception as error:
             message = str(error)[:1000]
             LOGGER.exception("Could not enable skill %s", name)
-            self._set_state(name, False, preview["version"], message)
+            self._rollback_skill(name, version, message)
+            self._write_failure_log(f"skill.{name}.enable", message)
             return {"ok": False, "message": message, "preview": preview}
 
     def disable(self, name: str) -> dict[str, Any]:
@@ -535,9 +573,17 @@ class SkillRegistry:
         except Exception as error:
             message = str(error)[:1000]
             LOGGER.exception("Skill action failed: %s", action_key)
-            self._set_state(prepared.skill_name, True, manifest.version, message)
-            result = SkillResult(ok=False, message=f"Skill action failed: {message}", verified=False)
-            self._write_run_log(prepared, result, "failed", approval_id)
+            self._rollback_skill(prepared.skill_name, manifest.version, message)
+            result = SkillResult(
+                ok=False,
+                message=f"Skill action failed: {message}",
+                verified=False,
+            )
+            try:
+                self._write_run_log(prepared, result, "failed", approval_id)
+            except Exception:
+                LOGGER.exception("Could not update the Skill action log: %s", action_key)
+                self._write_failure_log(action_key, message, prepared.risk.value)
             return result.model_dump()
 
     def _write_run_log(
