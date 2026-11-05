@@ -164,6 +164,43 @@ def test_quick_note_rejects_path_traversal(tmp_path, monkeypatch):
         skill._path("folder/note.md")
 
 
+
+def test_quick_note_rejects_symlink_and_writes_inside_notes_root(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from skills.quick_note import skill
+
+    notes = tmp_path / "notes"
+    outside = tmp_path / "outside.md"
+    outside.write_text("do not overwrite", encoding="utf-8")
+    monkeypatch.setattr(skill, "NOTES_ROOT", notes)
+    notes.mkdir()
+
+    link = notes / "linked.md"
+    try:
+        link.symlink_to(outside)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlink creation is unavailable on this runner")
+
+    with pytest.raises(ValueError, match="symbolic links"):
+        skill._path("linked.md")
+    with pytest.raises(ValueError, match="symbolic links"):
+        skill.run(
+            "save",
+            SimpleNamespace(filename="linked.md", title="bad", body="overwrite"),
+        )
+    assert outside.read_text(encoding="utf-8") == "do not overwrite"
+
+    result = skill.run(
+        "save",
+        SimpleNamespace(filename="safe.md", title="safe", body="inside"),
+    )
+    saved = notes / "safe.md"
+    assert result["ok"] is True
+    assert saved.resolve().is_relative_to(notes.resolve())
+    assert not saved.is_symlink()
+    assert saved.read_text(encoding="utf-8") == "# safe\\n\\ninside\\n"
+
 def test_enable_persists_in_skill_state(tmp_path):
     root = tmp_path / "skills"
     make_skill(root, "enable_me")
