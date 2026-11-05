@@ -213,8 +213,9 @@ def test_action_log_failure_blocks_execution_and_disables_skill(tmp_path, monkey
     marker = tmp_path / "executed.txt"
     source = (
         "from pathlib import Path\n"
-        + f"Path({str(marker)!r}).write_text('ran', encoding='utf-8')\n"
-        + "def run(action_id, params): return {'ok': True, 'message': 'ran'}\n"
+        + "def run(action_id, params):\n"
+        + f"    Path({str(marker)!r}).write_text('ran', encoding='utf-8')\n"
+        + "    return {'ok': True, 'message': 'ran'}\n"
         + "def verify(action_id, params, result): return True\n"
     )
     make_skill(root, "log_guard", body=source)
@@ -268,9 +269,9 @@ def test_quick_note_rejects_symlink_and_writes_inside_notes_root(tmp_path, monke
     except (OSError, NotImplementedError):
         pytest.skip("symlink creation is unavailable on this runner")
 
-    with pytest.raises(ValueError, match="symbolic links"):
+    with pytest.raises(ValueError, match="symlinks"):
         skill._path("linked.md")
-    with pytest.raises(ValueError, match="symbolic links"):
+    with pytest.raises(ValueError, match="symlinks"):
         skill.run(
             "save",
             SimpleNamespace(filename="linked.md", title="bad", body="overwrite"),
