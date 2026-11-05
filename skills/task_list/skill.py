@@ -114,7 +114,7 @@ def _write_tasks(tasks: list[dict]) -> None:
 
 def _validate_description(description: str) -> str:
     if not isinstance(description, str):
-        raise ValueError("description must be text")
+        raise TypeError("description must be text")
     value = description.strip()
     if not value or len(value) > _DESCRIPTION_LIMIT:
         raise ValueError(f"description must contain 1-{_DESCRIPTION_LIMIT} characters")
@@ -149,7 +149,7 @@ def run(action_id, params):
     if action_id == "add":
         try:
             description = _validate_description(params.description)
-        except ValueError as error:
+        except (TypeError, ValueError) as error:
             return {"ok": False, "message": str(error), "verified": False}
         task_id = max((item["id"] for item in tasks), default=0) + 1
         tasks.append({"id": task_id, "done": False, "description": description})
