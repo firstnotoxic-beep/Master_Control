@@ -146,11 +146,18 @@ def _capture(text: str) -> str:
 
 def run(action_id, params):
     if action_id == "capture":
+        try:
+            _validate_text(params.text)
+        except (TypeError, ValueError) as error:
+            return {"ok": False, "message": str(error), "verified": False}
         filename = _capture(params.text)
         return {"ok": True, "message": f"Captured: {filename}", "verified": False}
 
     if action_id == "list":
-        limit = _validate_limit(params.limit)
+        try:
+            limit = _validate_limit(params.limit)
+        except (TypeError, ValueError) as error:
+            return {"ok": False, "message": str(error), "verified": False}
         files = _note_files()[:limit]
         if not files:
             message = "No brain dump notes yet."
@@ -166,7 +173,10 @@ def run(action_id, params):
         return {"ok": True, "message": message, "verified": False}
 
     if action_id == "search":
-        keyword = _validate_keyword(params.keyword).casefold()
+        try:
+            keyword = _validate_keyword(params.keyword).casefold()
+        except (TypeError, ValueError) as error:
+            return {"ok": False, "message": str(error), "verified": False}
         matches = []
         for path in _note_files():
             content = path.read_text(encoding="utf-8")
