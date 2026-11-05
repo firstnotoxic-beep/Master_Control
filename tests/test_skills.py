@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from core.approval import approve, create_approval
-from core.db import fetch_one
+from core.db import execute, fetch_one
 from core.permissions import RiskLevel, minimum_risk_for_capabilities
 from core.skills import SkillRegistry
 
@@ -89,6 +89,50 @@ def test_medium_skill_requires_approval(tmp_path):
     result = registry.execute_action(prepared, approval_id)
     assert result == {"ok": True, "message": "ok", "verified": True}
 
+
+
+def test_execute_revalidates_prepared_action_and_stored_approval(tmp_path):
+    root = tmp_path / "skills"
+    source = """
+def run(action_id, params):
+    raise AssertionError("untrusted action must not execute")
+
+def verify(action_id, params, result):
+    return False
+"""
+    make_skill(root, "secure", risk="MEDIUM", capabilities=["process_control"], body=source)
+    config = tmp_path / "skills.toml"
+    write_config(config, ["secure"])
+    db = tmp_path / "db.sqlite"
+    registry = SkillRegistry(root, config, db)
+    prepared = registry.prepare_action("secure", "go", {"value": "safe"})
+
+    forged = prepared.__class__(
+        skill_name=prepared.skill_name,
+        action_id=prepared.action_id,
+        action_key=prepared.action_key,
+        params=prepared.params,
+        risk=RiskLevel.SAFE,
+        capabilities=prepared.capabilities,
+    )
+    rejected = registry.execute_action(forged)
+    assert rejected["ok"] is False
+    assert "Prepared action rejected" in rejected["message"]
+
+    approval_id = create_approval(
+        prepared.action_key, prepared.approval_details(), prepared.risk.value, db
+    )
+    approve(approval_id, db_path=db)
+    execute(
+        "UPDATE action_log SET details = ? WHERE id = "
+        "(SELECT action_log_id FROM approvals WHERE id = ?)",
+        ('{"skill_name":"secure","action_id":"go","params":{"value":"tampered"}}',
+         approval_id),
+        db,
+    )
+    rejected = registry.execute_action(prepared, approval_id)
+    assert rejected["ok"] is False
+    assert "Approved parameters do not match" in rejected["message"]
 
 def test_skill_exception_is_caught_and_logged(tmp_path):
     root = tmp_path / "skills"

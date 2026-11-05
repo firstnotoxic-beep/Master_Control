@@ -430,6 +430,31 @@ class SkillRegistry:
     def execute_action(
         self, prepared: PreparedSkillAction, approval_id: int | None = None
     ) -> dict[str, Any]:
+        try:
+            if not isinstance(prepared.params, BaseModel):
+                raise ValueError("prepared parameters are invalid")
+            canonical = self.prepare_action(
+                prepared.skill_name,
+                prepared.action_id,
+                prepared.params.model_dump(mode="json"),
+            )
+            if (
+                prepared.action_key != canonical.action_key
+                or prepared.risk != canonical.risk
+                or prepared.capabilities != canonical.capabilities
+                or type(prepared.params) is not type(canonical.params)
+                or prepared.params.model_dump(mode="json")
+                != canonical.params.model_dump(mode="json")
+            ):
+                raise PermissionError("Prepared action does not match the active manifest")
+            prepared = canonical
+        except Exception as error:
+            return {
+                "ok": False,
+                "message": f"Prepared action rejected: {str(error)[:500]}",
+                "verified": False,
+            }
+
         if prepared.risk == RiskLevel.CRITICAL:
             result = SkillResult(ok=False, message="CRITICAL actions cannot be executed", verified=False)
             self._write_run_log(prepared, result, "refused", approval_id)
@@ -446,7 +471,8 @@ class SkillRegistry:
             approval = fetch_one(
                 """
                 SELECT approvals.status, action_log.id AS action_log_id,
-                       action_log.action, action_log.details, action_log.risk_level
+                       action_log.action, action_log.details, action_log.risk_level,
+                       action_log.status AS action_status
                 FROM approvals
                 JOIN action_log ON action_log.id = approvals.action_log_id
                 WHERE approvals.id = ?
@@ -457,6 +483,7 @@ class SkillRegistry:
             if (
                 approval is None
                 or approval["status"] != "approved"
+                or approval["action_status"] != "approved"
                 or approval["action"] != prepared.action_key
                 or approval["risk_level"] != prepared.risk.value
             ):
