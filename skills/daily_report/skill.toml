@@ -1,0 +1,20 @@
+# Manifest สำหรับสร้างรายงานสรุปจากข้อมูลภายในเครื่องเท่านั้น
+name = "daily_report"
+version = "1.0.0"
+description = "Generate a local Markdown daily report from task, brain dump, and action log data."
+enabled-by-default = false
+
+[[actions]]
+id = "generate"
+description = "Generate or overwrite today's local Markdown report."
+risk = "LOW"
+capabilities = ["file_read", "file_write"]
+
+[[actions]]
+id = "generate_for_date"
+description = "Generate or overwrite a local Markdown report for a selected date."
+risk = "LOW"
+capabilities = ["file_read", "file_write"]
+
+[actions.params]
+date = "str"

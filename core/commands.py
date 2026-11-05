@@ -69,7 +69,9 @@ def handle_command(
             "run task_list.remove {\"task_id\":1}, "
             "run brain_dump.capture {\"text\":\"A thought...\"}, "
             "run brain_dump.list {\"limit\":10}, "
-            "run brain_dump.search {\"keyword\":\"idea\"}"
+            "run brain_dump.search {\"keyword\":\"idea\"}, "
+            "run daily_report.generate {}, "
+            "run daily_report.generate_for_date {\"date\":\"YYYY-MM-DD\"}"
         )
     elif lowered.startswith("add task "):
         action, details = "add_task", raw[9:].strip()

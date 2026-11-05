@@ -82,3 +82,23 @@ Search is case-insensitive and requires a non-empty keyword. Capture uses only
 reuses the quick_note/task_list-style symlink, junction, reparse-point, resolved-path,
 and post-write checks. The framework's action-log preflight must succeed before any
 Skill action executes.
+
+
+## Daily Report Skill
+
+The optional daily_report Skill reads the local task list, date-matched Brain Dump
+notes, and the SQLite action_log, then writes a Markdown report to
+data/reports/YYYY-MM-DD.md. Re-running the same date overwrites that date's
+report; source files and database records are read-only.
+
+Commands after reviewing and enabling the Skill:
+
+- run daily_report.generate {} — generate today's report (machine-local date).
+- run daily_report.generate_for_date {"date":"2026-11-05"} — generate a selected date.
+
+The task list has no per-task date metadata, so its section is explicitly a current
+snapshot at report time rather than historical activity for the selected date.
+Missing or empty source data is shown as ไม่มีข้อมูล (no data). Both actions use
+only file_read and file_write, giving them a LOW final risk floor; no network
+capability is declared. The generic Skill pages and CLI registry expose the Skill;
+no dashboard layout is added.
