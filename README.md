@@ -32,7 +32,7 @@ Quickstart coming soon. ดู dependencies และสถานะการพ
 | 5 | AI Provider Layer | Groq primary; Gemini/GitHub Models fallback; Pydantic action proposals; no private data sent to cloud without consent | Planned |
 | 6 | Discord Integration | Status/task commands, approve/cancel buttons, owner ID check | Planned |
 | 7 | Personal Productivity | Task engine, morning SITREP, voice via faster-whisper, knowledge search | Planned |
-| 8 | Gaming Assistant | Game profiles and session analytics; no game/anti-cheat interaction, process killing, or fan control | Planned |
+| 8 | Gaming Assistant | Game profiles and session analytics; no anti-cheat interaction, game-process termination, or fan control | Planned |
 | 9 | Desktop Experience | Command palette, quick actions, system tray, privacy center | Planned |
 | 10 | Ecosystem | Local Skill marketplace, versioning, compatibility checks, config export/import | Planned |
 
