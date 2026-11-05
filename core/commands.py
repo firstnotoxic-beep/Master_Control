@@ -66,7 +66,10 @@ def handle_command(
             "focus mode, mode status, restore mode [session_id], top processes, skills, "
             "skill enable NAME, run task_list.add {\"description\":\"...\"}, "
             "run task_list.list {}, run task_list.done {\"task_id\":1}, "
-            "run task_list.remove {\"task_id\":1}"
+            "run task_list.remove {\"task_id\":1}, "
+            "run brain_dump.capture {\"text\":\"A thought...\"}, "
+            "run brain_dump.list {\"limit\":10}, "
+            "run brain_dump.search {\"keyword\":\"idea\"}"
         )
     elif lowered.startswith("add task "):
         action, details = "add_task", raw[9:].strip()
