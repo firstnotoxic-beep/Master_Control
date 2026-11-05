@@ -64,7 +64,7 @@ def handle_command(
             "status, alerts status, snooze <alert_id> <15|30|60>, ack <alert_id>, "
             "vacation on/off, skip bedtime, add task <รายละเอียด>, list tasks, gaming mode, "
             "focus mode, mode status, restore mode [session_id], top processes, skills, "
-            "skill enable NAME, run task_list.add {\"description\":\"...\}"}, "
+            "skill enable NAME, run task_list.add {\"description\":\"...\"}, "
             "run task_list.list {}, run task_list.done {\"task_id\":1}, "
             "run task_list.remove {\"task_id\":1}"
         )
