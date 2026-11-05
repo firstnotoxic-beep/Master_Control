@@ -1,6 +1,7 @@
 # บันทึกโน้ต Markdown เฉพาะโฟลเดอร์ data/notes
 import os
 import re
+import stat
 import tempfile
 from pathlib import Path
 
@@ -8,13 +9,31 @@ NOTES_ROOT = Path("data/notes")
 FILENAME = re.compile(r"^[A-Za-z0-9_-]{1,60}\.md$")
 
 
+def _is_link_or_reparse(path: Path) -> bool:
+    if path.is_symlink():
+        return True
+    is_junction = getattr(path, "is_junction", None)
+    if callable(is_junction) and is_junction():
+        return True
+    try:
+        attributes = path.lstat().st_file_attributes
+    except (AttributeError, FileNotFoundError):
+        return False
+    reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    return bool(attributes & reparse_flag)
+
+
 def _path(filename: str) -> Path:
     if not isinstance(filename, str) or not FILENAME.fullmatch(filename):
         raise ValueError("filename must be a simple Markdown filename")
+    if _is_link_or_reparse(NOTES_ROOT):
+        raise ValueError("notes directory cannot be a symlink or reparse point")
     root = NOTES_ROOT.resolve()
+    if _is_link_or_reparse(root):
+        raise ValueError("notes directory cannot be a symlink or reparse point")
     target = root / filename
-    if target.is_symlink():
-        raise ValueError("symbolic links are not allowed for note files")
+    if _is_link_or_reparse(target):
+        raise ValueError("note files cannot be symlinks or reparse points")
     resolved = target.resolve(strict=False)
     if not resolved.is_relative_to(root):
         raise ValueError("path must remain inside data/notes")
@@ -44,7 +63,14 @@ def run(action_id, params):
             raise ValueError("note path changed while writing")
         os.replace(temporary_path, target)
         temporary_path = None
-        if target.is_symlink() or not target.resolve(strict=True).is_relative_to(root):
+        if _is_link_or_reparse(root) or _is_link_or_reparse(target):
+            raise ValueError("final note path cannot be a symlink or reparse point")
+        resolved_root = root.resolve(strict=True)
+        resolved_target = target.resolve(strict=True)
+        if (
+            not resolved_target.is_relative_to(resolved_root)
+            or resolved_target.parent != resolved_root
+        ):
             raise ValueError("final note path must remain inside data/notes")
     finally:
         if temporary_path is not None:

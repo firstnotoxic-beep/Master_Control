@@ -206,6 +206,41 @@ def test_failed_run_disables_skill_and_keeps_failure_log(tmp_path):
     )
     assert log["status"] == "failed"
 
+def test_action_log_failure_blocks_execution_and_disables_skill(tmp_path, monkeypatch):
+    from core import skills
+
+    root = tmp_path / "skills"
+    marker = tmp_path / "executed.txt"
+    source = (
+        "from pathlib import Path\n"
+        + "def run(action_id, params):\n"
+        + f"    Path({str(marker)!r}).write_text('ran', encoding='utf-8')\n"
+        + "    return {'ok': True, 'message': 'ran'}\n"
+        + "def verify(action_id, params, result): return True\n"
+    )
+    make_skill(root, "log_guard", body=source)
+    config = tmp_path / "skills.toml"
+    write_config(config, ["log_guard"])
+    db = tmp_path / "db.sqlite"
+    registry = SkillRegistry(root, config, db)
+    prepared = registry.prepare_action("log_guard", "go", {"value": "x"})
+    fallback_path = tmp_path / "skill-failures.log"
+    monkeypatch.setattr(skills, "DEFAULT_FAILURE_LOG_PATH", fallback_path)
+
+    def fail_action_log(*args, **kwargs):
+        raise OSError("simulated action-log database failure")
+
+    monkeypatch.setattr(registry, "_write_run_log", fail_action_log)
+    result = registry.execute_action(prepared)
+
+    assert result["ok"] is False
+    assert not marker.exists()
+    assert "log_guard" not in registry._loaded
+    assert "log_guard" not in config.read_text(encoding="utf-8")
+    assert fallback_path.exists()
+    assert "Execution blocked before Skill code ran" in fallback_path.read_text(encoding="utf-8")
+
+
 def test_quick_note_rejects_path_traversal(tmp_path, monkeypatch):
     from skills.quick_note import skill
 
@@ -234,9 +269,9 @@ def test_quick_note_rejects_symlink_and_writes_inside_notes_root(tmp_path, monke
     except (OSError, NotImplementedError):
         pytest.skip("symlink creation is unavailable on this runner")
 
-    with pytest.raises(ValueError, match="symbolic links"):
+    with pytest.raises(ValueError, match="symlinks"):
         skill._path("linked.md")
-    with pytest.raises(ValueError, match="symbolic links"):
+    with pytest.raises(ValueError, match="symlinks"):
         skill.run(
             "save",
             SimpleNamespace(filename="linked.md", title="bad", body="overwrite"),
@@ -252,6 +287,43 @@ def test_quick_note_rejects_symlink_and_writes_inside_notes_root(tmp_path, monke
     assert saved.resolve().is_relative_to(notes.resolve())
     assert not saved.is_symlink()
     assert saved.read_text(encoding="utf-8") == "# safe\n\ninside\n"
+
+
+def test_quick_note_rechecks_final_path_and_rejects_reparse_points(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from skills.quick_note import skill
+
+    notes = tmp_path / "notes"
+    outside = tmp_path / "outside.md"
+    outside.write_text("keep safe", encoding="utf-8")
+    notes.mkdir()
+    monkeypatch.setattr(skill, "NOTES_ROOT", notes)
+
+    if hasattr(Path, "is_junction"):
+        original_is_junction = Path.is_junction
+        monkeypatch.setattr(
+            Path,
+            "is_junction",
+            lambda path: path.name == "junction.md" or original_is_junction(path),
+        )
+        with pytest.raises(ValueError, match="reparse point"):
+            skill._path("junction.md")
+
+    def replace_with_symlink(source, destination):
+        try:
+            Path(destination).symlink_to(outside)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlink creation is unavailable on this runner")
+        Path(source).unlink()
+
+    monkeypatch.setattr(skill.os, "replace", replace_with_symlink)
+    with pytest.raises(ValueError, match="final note path"):
+        skill.run(
+            "save",
+            SimpleNamespace(filename="raced.md", title="race", body="must reject"),
+        )
+    assert outside.read_text(encoding="utf-8") == "keep safe"
 
 
 def test_disable_command_does_not_import_enabled_skill(tmp_path, monkeypatch):
