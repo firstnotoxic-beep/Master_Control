@@ -427,6 +427,7 @@ class SkillRegistry:
             return {"ok": False, "message": "Invalid skill name"}
         config_file = Path(config_path or DEFAULT_CONFIG_PATH)
         try:
+            init_db(db_path)
             if config_file.exists():
                 with config_file.open("rb") as handle:
                     config = tomllib.load(handle)
@@ -527,7 +528,6 @@ class SkillRegistry:
                 prepared.action_key != canonical.action_key
                 or prepared.risk != canonical.risk
                 or prepared.capabilities != canonical.capabilities
-                or type(prepared.params) is not type(canonical.params)
                 or prepared.params.model_dump(mode="json")
                 != canonical.params.model_dump(mode="json")
             ):
