@@ -51,7 +51,9 @@ Phase 4
 - [ ] Confirm no Skill loads unless listed in config/skills.toml; malformed manifests are skipped
 - [ ] Review each Skill source before enabling; confirm capability floors are raised and logged
 - [ ] Confirm MEDIUM+ Skill actions remain pending until explicit approval and are logged after verification
-- [ ] Confirm quick_note rejects traversal and writes only within data/notes/\n- [ ] Confirm brain_dump captures append-only timestamped notes only within data/brain_dump/ and rejects symlink/junction/reparse escapes\n- [ ] Confirm brain_dump list/search behavior, input limits, empty-search rejection, and fail-closed action-log behavior
+- [ ] Confirm quick_note rejects traversal and writes only within data/notes/
+- [ ] Confirm brain_dump captures append-only timestamped notes only within data/brain_dump/ and rejects symlink/junction/reparse escapes
+- [ ] Confirm brain_dump list/search behavior, input limits, empty-search rejection, and fail-closed action-log behavior
 - [ ] Verify dashboard lists installed/enabled Skills, capability/risk summaries, last errors, and enable/disable controls
 - [ ] Test enable/disable persistence across dashboard restart
 - [ ] Confirm Python Skill code is treated as trusted local code, not an OS sandbox
