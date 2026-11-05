@@ -11,7 +11,7 @@ from core.skills import SkillRegistry
 def write_config(path: Path, enabled: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     names = ", ".join(f'"{name}"' for name in enabled)
-    path.write_text(f"enabled = [{names}]\\n", encoding="utf-8")
+    path.write_text(f"enabled = [{names}]\n", encoding="utf-8")
 
 
 def make_registry(tmp_path: Path, monkeypatch, *, enabled=True):
@@ -133,7 +133,7 @@ def test_brain_dump_rejects_invalid_and_oversized_capture(tmp_path, monkeypatch)
     oversized = run_action(
         registry, "capture", {"text": "x" * (module._MAX_TEXT_LENGTH + 1)}
     )
-    control = run_action(registry, "capture", {"text": "invalid\\x00text"})
+    control = run_action(registry, "capture", {"text": "invalid\x00text"})
 
     assert empty["ok"] is False
     assert oversized["ok"] is False
