@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 DEFAULT_DB_PATH = Path("data/mastercontrol.db")
 
 
@@ -153,6 +153,22 @@ def init_db(db_path: str | Path = DEFAULT_DB_PATH) -> None:
                     status TEXT NOT NULL
                 )
                 """
+            )
+
+        if current_version < 4:
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS skill_state (
+                    name TEXT PRIMARY KEY,
+                    enabled INTEGER NOT NULL DEFAULT 0,
+                    version TEXT NOT NULL DEFAULT '',
+                    last_error TEXT,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            connection.execute(
+                "UPDATE settings SET value = '4' WHERE key = 'schema_version'"
             )
 
 

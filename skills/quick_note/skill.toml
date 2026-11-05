@@ -1,0 +1,15 @@
+name = "quick_note"
+version = "1.0.0"
+description = "Write Markdown notes in data/notes."
+enabled-by-default = false
+
+[[actions]]
+id = "save"
+description = "Save a Markdown note."
+risk = "SAFE"
+capabilities = ["file_write"]
+
+[actions.params]
+filename = "str"
+title = "str"
+body = "str"
