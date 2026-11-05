@@ -183,7 +183,7 @@ def test_failed_enable_rolls_back_config_module_state_and_logs(tmp_path):
 
 def test_failed_run_disables_skill_and_keeps_failure_log(tmp_path):
     root = tmp_path / "skills"
-    make_skill(root, "fails_run", body="def run(action_id, params):\n    return None\n")
+    make_skill(root, "fails_run", body="def run(action_id, params):\n    return None\ndef verify(action_id, params, result):\n    return False\n")
     config = tmp_path / "skills.toml"
     write_config(config, ["fails_run"])
     db = tmp_path / "db.sqlite"
