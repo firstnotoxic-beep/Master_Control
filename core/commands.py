@@ -174,7 +174,7 @@ def handle_command(
         from core.skills import SkillRegistry
 
         skill_name = raw[len("skill disable "):].strip().lower()
-        disabled = SkillRegistry(db_path=db_path).disable(skill_name)
+        disabled = SkillRegistry.disable_without_loading(skill_name, db_path=db_path)
         return {"ok": disabled["ok"], "action": "skill_disable", "message": disabled["message"]}
     elif lowered.startswith("run "):
         from core.skills import SkillRegistry

@@ -416,16 +416,63 @@ class SkillRegistry:
             self._write_failure_log(f"skill.{name}.enable", message)
             return {"ok": False, "message": message, "preview": preview}
 
-    def disable(self, name: str) -> dict[str, Any]:
+    @classmethod
+    def disable_without_loading(
+        cls,
+        name: str,
+        db_path: str | Path = DEFAULT_DB_PATH,
+        config_path: str | Path | None = None,
+    ) -> dict[str, Any]:
         if not _NAME_PATTERN.fullmatch(name):
             return {"ok": False, "message": "Invalid skill name"}
-        enabled_names = self._enabled_names()
-        self._write_enabled_names([item for item in enabled_names if item != name])
-        self._set_state(name, False)
-        self._loaded.pop(name, None)
+        config_file = Path(config_path or DEFAULT_CONFIG_PATH)
+        try:
+            if config_file.exists():
+                with config_file.open("rb") as handle:
+                    config = tomllib.load(handle)
+                enabled_names = config.get("enabled", [])
+                if not isinstance(enabled_names, list) or any(
+                    not isinstance(item, str) or not _NAME_PATTERN.fullmatch(item)
+                    for item in enabled_names
+                ):
+                    raise ValueError("config/skills.toml must contain enabled = [skill names]")
+            else:
+                enabled_names = []
+            remaining = sorted(set(item for item in enabled_names if item != name))
+            config_file.parent.mkdir(parents=True, exist_ok=True)
+            lines = ["enabled = ["]
+            lines.extend(f"  {json.dumps(item)}," for item in remaining)
+            lines.append("]")
+            config_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            state = fetch_one(
+                "SELECT version FROM skill_state WHERE name = ?", (name,), db_path
+            )
+            version = state["version"] if state else ""
+            execute(
+                """
+                INSERT INTO skill_state (name, enabled, version, last_error, updated_at)
+                VALUES (?, 0, ?, NULL, CURRENT_TIMESTAMP)
+                ON CONFLICT(name) DO UPDATE SET
+                    enabled = 0,
+                    last_error = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (name, version),
+                db_path,
+            )
+        except (OSError, ValueError, tomllib.TOMLDecodeError) as error:
+            return {"ok": False, "message": str(error)}
         unregister_skill_actions(f"skill.{name}.")
         sys.modules.pop(f"mastercontrol_skill_{name}", None)
         return {"ok": True, "message": f"Disabled skill: {name}"}
+
+    def disable(self, name: str) -> dict[str, Any]:
+        result = self.disable_without_loading(
+            name, db_path=self.db_path, config_path=self.config_path
+        )
+        if result["ok"]:
+            self._loaded.pop(name, None)
+        return result
 
     def prepare_action(
         self, skill_name: str, action_id: str, payload: dict[str, Any]

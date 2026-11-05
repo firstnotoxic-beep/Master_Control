@@ -253,6 +253,36 @@ def test_quick_note_rejects_symlink_and_writes_inside_notes_root(tmp_path, monke
     assert not saved.is_symlink()
     assert saved.read_text(encoding="utf-8") == "# safe\\n\\ninside\\n"
 
+
+def test_disable_command_does_not_import_enabled_skill(tmp_path, monkeypatch):
+    from core import skills
+    from core.commands import handle_command
+
+    root = tmp_path / "skills"
+    marker = tmp_path / "imported.txt"
+    source = (
+        "from pathlib import Path\\n"
+        + f"Path({str(marker)!r}).write_text('imported', encoding='utf-8')\\n"
+        + "def run(action_id, params): return {'ok': True, 'message': 'ok'}\\n"
+        + "def verify(action_id, params, result): return True\\n"
+    )
+    make_skill(root, "quiet_disable", body=source)
+    config = tmp_path / "config" / "skills.toml"
+    write_config(config, ["quiet_disable"])
+    db = tmp_path / "db.sqlite"
+    monkeypatch.setattr(skills, "DEFAULT_CONFIG_PATH", config)
+    skills.init_db(db)
+
+    result = handle_command("skill disable quiet_disable", db)
+
+    assert result["ok"] is True
+    assert not marker.exists()
+    assert "quiet_disable" not in config.read_text(encoding="utf-8")
+    state = fetch_one(
+        "SELECT enabled FROM skill_state WHERE name = 'quiet_disable'", db_path=db
+    )
+    assert state["enabled"] == 0
+
 def test_enable_persists_in_skill_state(tmp_path):
     root = tmp_path / "skills"
     make_skill(root, "enable_me")
