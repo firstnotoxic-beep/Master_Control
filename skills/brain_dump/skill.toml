@@ -1,0 +1,32 @@
+# Manifest สำหรับบันทึกข้อความแบบ opt-in และไม่ส่งข้อมูลออกเครือข่าย
+name = "brain_dump"
+version = "1.0.0"
+description = "Capture append-only timestamped notes and list or search them locally."
+enabled-by-default = false
+
+[[actions]]
+id = "capture"
+description = "Capture free-text as a new timestamped local note."
+risk = "SAFE"
+capabilities = ["file_write"]
+
+[actions.params]
+text = "str"
+
+[[actions]]
+id = "list"
+description = "List the latest local brain dump notes."
+risk = "LOW"
+capabilities = ["file_read"]
+
+[actions.params]
+limit = "int"
+
+[[actions]]
+id = "search"
+description = "Search local brain dump notes by case-insensitive keyword."
+risk = "LOW"
+capabilities = ["file_read"]
+
+[actions.params]
+keyword = "str"
