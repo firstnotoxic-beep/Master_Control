@@ -159,7 +159,10 @@ def run(action_id, params):
                 f"## {path.name}\n{path.read_text(encoding='utf-8').rstrip()}"
                 for path in files
             ]
-            message = f"Latest {len(files)} brain dump note(s):\n" + "\n\n".join(entries)
+            message = (
+                f"Latest {len(files)} brain dump note(s):\n"
+                + "\n\n".join(entries)
+            )
         return {"ok": True, "message": message, "verified": False}
 
     if action_id == "search":
