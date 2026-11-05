@@ -60,6 +60,11 @@ def test_brain_dump_uses_only_low_risk_capabilities(tmp_path, monkeypatch):
     assert registry.prepare_action(
         "brain_dump", "search", {"keyword": "thought"}
     ).risk == RiskLevel.LOW
+    preview = registry.preview("brain_dump")
+    assert all(
+        set(action["requested_capabilities"]) <= {"file_read", "file_write"}
+        for action in preview["actions"]
+    )
 
 
 def test_brain_dump_capture_is_append_only_and_list_returns_latest_n(
@@ -124,6 +129,32 @@ def test_brain_dump_rejects_directory_and_file_symlinks(tmp_path, monkeypatch):
         module._note_files()
     assert outside_note.read_text(encoding="utf-8") == "must remain untouched"
     assert registry is not None
+
+
+def test_brain_dump_rejects_reparse_point_directory(tmp_path, monkeypatch):
+    _registry, module, _config = make_registry(tmp_path, monkeypatch)
+    module.DATA_ROOT.mkdir(parents=True)
+
+    if not hasattr(Path, "is_junction"):
+        pytest.skip("junction detection is unavailable on this Python version")
+    original_is_junction = Path.is_junction
+    monkeypatch.setattr(
+        Path,
+        "is_junction",
+        lambda path: path == module.BRAIN_DUMP_ROOT or original_is_junction(path),
+    )
+
+    with pytest.raises(ValueError, match="symlink or reparse point"):
+        module._safe_root(create=True)
+
+
+def test_brain_dump_rejects_traversal_filename(tmp_path, monkeypatch):
+    _registry, module, _config = make_registry(tmp_path, monkeypatch)
+    root = tmp_path / "data" / "brain_dump"
+    root.mkdir(parents=True)
+
+    with pytest.raises(ValueError, match="invalid brain dump filename"):
+        module._safe_note_path("../outside.md", root)
 
 
 def test_brain_dump_rejects_invalid_and_oversized_capture(tmp_path, monkeypatch):
