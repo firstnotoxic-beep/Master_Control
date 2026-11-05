@@ -182,10 +182,11 @@ def verify(action_id, params, result):
         return False
     if action_id == "capture":
         content = _validate_text(params.text)
-        expected_suffix = f"\n\n{content}\n"
-        return any(
-            path.read_text(encoding="utf-8").endswith(expected_suffix)
-            for path in _note_files()
+        filename = result.get("message", "").removeprefix("Captured: ")
+        root = _safe_root()
+        target = _safe_note_path(filename, root)
+        return target.is_file() and target.read_text(encoding="utf-8").endswith(
+            f"\n\n{content}\n"
         )
     if action_id == "list":
         _validate_limit(params.limit)
