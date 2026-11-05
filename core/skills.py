@@ -7,8 +7,8 @@ import logging
 import re
 import sys
 import tomllib
-from datetime import datetime, timezone
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
@@ -34,6 +34,7 @@ from core.permissions import (
 LOGGER = logging.getLogger(__name__)
 DEFAULT_SKILLS_DIR = Path("skills")
 DEFAULT_CONFIG_PATH = Path("config/skills.toml")
+DEFAULT_FAILURE_LOG_PATH = Path("data/logs/skill-failures.log")
 _CAPABILITY_VALUES = {
     "file_read",
     "file_write",
@@ -355,7 +356,7 @@ class SkillRegistry:
         return items
 
     def _write_plain_failure_log(self, action: str, message: str) -> None:
-        log_path = Path("data/logs/skill-failures.log")
+        log_path = DEFAULT_FAILURE_LOG_PATH
         log_path.parent.mkdir(parents=True, exist_ok=True)
         record = json.dumps(
             {
