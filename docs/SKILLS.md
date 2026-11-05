@@ -43,3 +43,22 @@ The framework raises lower declared risks automatically. MEDIUM and higher requi
 Commands: `skills`, `skill enable NAME` (preview), `skill enable NAME confirm` (confirm), `skill disable NAME`, and `run NAME.ACTION {"field":"value"}`.
 
 A Skill is Python code running in the same process as MasterControl, not an operating-system sandbox. Capability declarations are permission metadata, not isolation. Review all source files and enable only trusted Skills.
+
+## Task List Skill
+
+The optional `task_list` Skill stores its Markdown data in `data/tasks/tasks.md`.
+It supports the existing generic Skill CLI and dashboard controls; it does not add a
+separate dashboard layout. The Skill remains disabled until explicitly enabled.
+
+Commands after reviewing and enabling the Skill:
+
+- `run task_list.add {"description":"Finish physics homework"}`
+- `run task_list.list {}`
+- `run task_list.done {"task_id":1}`
+- `run task_list.remove {"task_id":1}`
+
+All write operations use the `file_write` capability and rewrite the Markdown file
+atomically. Removing a task removes its entry by rewriting the file; it does not
+request the higher-risk `file_delete` capability. The list action uses `file_read`
+and therefore receives the framework's LOW risk floor. None of these actions
+requires approval because their final risk is below MEDIUM.

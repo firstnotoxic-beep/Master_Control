@@ -1,0 +1,38 @@
+# Skill manifest สำหรับ task list โดยปิดใช้งานไว้จนกว่าจะเปิดเอง
+name = "task_list"
+version = "1.0.0"
+description = "Add, list, complete, and remove local tasks in data/tasks/tasks.md."
+enabled-by-default = false
+
+[[actions]]
+id = "add"
+description = "Add a task to the local Markdown list."
+risk = "SAFE"
+capabilities = ["file_write"]
+
+[actions.params]
+description = "str"
+
+[[actions]]
+id = "list"
+description = "List tasks from the local Markdown file."
+risk = "LOW"
+capabilities = ["file_read"]
+
+[[actions]]
+id = "done"
+description = "Mark a task as completed."
+risk = "SAFE"
+capabilities = ["file_write"]
+
+[actions.params]
+task_id = "int"
+
+[[actions]]
+id = "remove"
+description = "Remove a task from the local Markdown list."
+risk = "SAFE"
+capabilities = ["file_write"]
+
+[actions.params]
+task_id = "int"
