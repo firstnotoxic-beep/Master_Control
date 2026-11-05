@@ -157,7 +157,7 @@ def verify(action_id, params, result):
 
 def test_failed_enable_rolls_back_config_module_state_and_logs(tmp_path):
     root = tmp_path / "skills"
-    make_skill(root, "fails_enable", body="def run(:\\n")
+    make_skill(root, "fails_enable", body="def run(:\n")
     config = tmp_path / "skills.toml"
     write_config(config, [])
     db = tmp_path / "db.sqlite"
@@ -183,7 +183,7 @@ def test_failed_enable_rolls_back_config_module_state_and_logs(tmp_path):
 
 def test_failed_run_disables_skill_and_keeps_failure_log(tmp_path):
     root = tmp_path / "skills"
-    make_skill(root, "fails_run", body="def run(action_id, params):\\n    return None\\n")
+    make_skill(root, "fails_run", body="def run(action_id, params):\n    return None\n")
     config = tmp_path / "skills.toml"
     write_config(config, ["fails_run"])
     db = tmp_path / "db.sqlite"
@@ -251,7 +251,7 @@ def test_quick_note_rejects_symlink_and_writes_inside_notes_root(tmp_path, monke
     assert result["ok"] is True
     assert saved.resolve().is_relative_to(notes.resolve())
     assert not saved.is_symlink()
-    assert saved.read_text(encoding="utf-8") == "# safe\\n\\ninside\\n"
+    assert saved.read_text(encoding="utf-8") == "# safe\n\ninside\n"
 
 
 def test_disable_command_does_not_import_enabled_skill(tmp_path, monkeypatch):
@@ -261,10 +261,10 @@ def test_disable_command_does_not_import_enabled_skill(tmp_path, monkeypatch):
     root = tmp_path / "skills"
     marker = tmp_path / "imported.txt"
     source = (
-        "from pathlib import Path\\n"
-        + f"Path({str(marker)!r}).write_text('imported', encoding='utf-8')\\n"
-        + "def run(action_id, params): return {'ok': True, 'message': 'ok'}\\n"
-        + "def verify(action_id, params, result): return True\\n"
+        "from pathlib import Path\n"
+        + f"Path({str(marker)!r}).write_text('imported', encoding='utf-8')\n"
+        + "def run(action_id, params): return {'ok': True, 'message': 'ok'}\n"
+        + "def verify(action_id, params, result): return True\n"
     )
     make_skill(root, "quiet_disable", body=source)
     config = tmp_path / "config" / "skills.toml"
