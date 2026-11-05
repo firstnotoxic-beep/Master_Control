@@ -439,7 +439,7 @@ class SkillRegistry:
                     raise ValueError("config/skills.toml must contain enabled = [skill names]")
             else:
                 enabled_names = []
-            remaining = sorted(set(item for item in enabled_names if item != name))
+            remaining = sorted({item for item in enabled_names if item != name})
             config_file.parent.mkdir(parents=True, exist_ok=True)
             lines = ["enabled = ["]
             lines.extend(f"  {json.dumps(item)}," for item in remaining)
@@ -518,7 +518,7 @@ class SkillRegistry:
     ) -> dict[str, Any]:
         try:
             if not isinstance(prepared.params, BaseModel):
-                raise ValueError("prepared parameters are invalid")
+                raise TypeError("prepared parameters are invalid")
             canonical = self.prepare_action(
                 prepared.skill_name,
                 prepared.action_id,
@@ -533,7 +533,7 @@ class SkillRegistry:
             ):
                 raise PermissionError("Prepared action does not match the active manifest")
             prepared = canonical
-        except Exception as error:
+        except (AttributeError, TypeError, ValueError, PermissionError) as error:
             return {
                 "ok": False,
                 "message": f"Prepared action rejected: {str(error)[:500]}",
