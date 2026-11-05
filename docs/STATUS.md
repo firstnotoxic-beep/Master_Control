@@ -5,7 +5,7 @@ Owner cannot test on the target Windows machine for now. All results below are m
 
 ## CI
 - CI workflow exists at `.github/workflows/ci.yml`.
-- Runs on a GitHub-hosted Windows runner with Python 3.12 for pull requests and pushes to branches other than `main`.
+- Runs on a GitHub-hosted Windows runner with Python 3.12 for pull requests targeting `main` and pushes to `main` only.
 - Runs dependency installation, Ruff, and pytest. Tests use mocks only; CI does not verify behavior on the owner's Windows PC, which remains UNVERIFIED.
 
 ## Architecture changes since the original blueprint
@@ -44,7 +44,6 @@ Phase 3
 - [ ] Task due in 1h -> Warning, repeats until ack
 - [ ] Snooze works; vacation mode silences bedtime
 - [ ] Only one scheduler instance runs; idle CPU near 0%
-
 
 Phase 4
 - [ ] Run `pytest -q` and `ruff check .` on Python 3.11+ with the existing dependencies
