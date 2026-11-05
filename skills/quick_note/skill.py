@@ -44,7 +44,7 @@ def run(action_id, params):
             raise ValueError("note path changed while writing")
         os.replace(temporary_path, target)
         temporary_path = None
-        if not target.resolve(strict=True).is_relative_to(root):
+        if target.is_symlink() or not target.resolve(strict=True).is_relative_to(root):
             raise ValueError("final note path must remain inside data/notes")
     finally:
         if temporary_path is not None:
