@@ -170,6 +170,7 @@ def test_brain_dump_rejects_invalid_and_oversized_capture(tmp_path, monkeypatch)
     assert oversized["ok"] is False
     assert control["ok"] is False
     assert not module.BRAIN_DUMP_ROOT.exists()
+    assert "brain_dump" in registry._loaded
 
 
 def test_brain_dump_rejects_empty_search_and_invalid_list_limit(
@@ -183,6 +184,7 @@ def test_brain_dump_rejects_empty_search_and_invalid_list_limit(
     assert empty_search["ok"] is False
     assert invalid_limit["ok"] is False
     assert not module.BRAIN_DUMP_ROOT.exists()
+    assert "brain_dump" in registry._loaded
 
 
 def test_brain_dump_action_log_failure_blocks_capture(tmp_path, monkeypatch):
