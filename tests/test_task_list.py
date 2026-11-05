@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from core.permissions import RiskLevel
 from core.skills import SkillRegistry
 
 
@@ -41,6 +42,17 @@ def test_task_list_is_opt_in_by_default(tmp_path, monkeypatch):
     assert task_skill["enabled"] is False
     assert task_skill["actions"]
     assert "task_list" not in registry._loaded
+
+
+def test_task_list_uses_only_low_risk_capabilities(tmp_path, monkeypatch):
+    registry, _module, _config = make_registry(tmp_path, monkeypatch)
+
+    assert registry.prepare_action(
+        "task_list", "add", {"description": "A task"}
+    ).risk == RiskLevel.SAFE
+    assert registry.prepare_action("task_list", "list", {}).risk == RiskLevel.LOW
+    assert registry.prepare_action("task_list", "done", {"task_id": 1}).risk == RiskLevel.SAFE
+    assert registry.prepare_action("task_list", "remove", {"task_id": 1}).risk == RiskLevel.SAFE
 
 
 def test_task_list_add_list_done_and_remove(tmp_path, monkeypatch):
