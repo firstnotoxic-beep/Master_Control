@@ -62,3 +62,23 @@ atomically. Removing a task removes its entry by rewriting the file; it does not
 request the higher-risk `file_delete` capability. The list action uses `file_read`
 and therefore receives the framework's LOW risk floor. None of these actions
 requires approval because their final risk is below MEDIUM.
+
+## Brain Dump Skill
+
+The optional `brain_dump` Skill captures free-text notes as separate, timestamped
+Markdown files under `data/brain_dump/`. Captures are append-only: existing notes
+are not edited or deleted. The Skill has no network capability and remains disabled
+until explicitly enabled.
+
+Commands after reviewing and enabling the Skill:
+
+- `run brain_dump.capture {"text":"A thought to remember"}`
+- `run brain_dump.list {"limit":10}`
+- `run brain_dump.search {"keyword":"idea"}`
+
+Capture accepts 1–5,000 characters. List accepts 1–20 for its latest-N limit.
+Search is case-insensitive and requires a non-empty keyword. Capture uses only
+`file_write` (SAFE); list and search use only `file_read` (LOW). The implementation
+reuses the quick_note/task_list-style symlink, junction, reparse-point, resolved-path,
+and post-write checks. The framework's action-log preflight must succeed before any
+Skill action executes.
