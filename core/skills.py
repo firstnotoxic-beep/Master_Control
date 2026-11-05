@@ -8,7 +8,7 @@ import re
 import sys
 import tomllib
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -360,7 +360,7 @@ class SkillRegistry:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         record = json.dumps(
             {
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "action": action,
                 "error": message[:2000],
             },
