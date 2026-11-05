@@ -136,7 +136,10 @@ def _capture(text: str) -> str:
         raise ValueError("final brain dump path cannot be a symlink or reparse point")
     resolved_root = root.resolve(strict=True)
     resolved_target = target.resolve(strict=True)
-    if resolved_target.parent != resolved_root or not resolved_target.is_relative_to(resolved_root):
+    if (
+        resolved_target.parent != resolved_root
+        or not resolved_target.is_relative_to(resolved_root)
+    ):
         raise ValueError("final brain dump path must remain inside data/brain_dump")
     return filename
 
