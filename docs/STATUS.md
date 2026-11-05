@@ -21,7 +21,7 @@ Owner cannot test on the target Windows machine for now. All results below are m
 | 1 | Foundation: db, permissions, approval, commands, notify, dashboard | Done, UNVERIFIED on Windows (real toast + Discord) |
 | 2 | Telemetry, Process Monitor, Mode Engine (Gaming/Focus), mode_sessions (schema v2) | Done in mocks, UNVERIFIED |
 | 3 | Alert Engine: bedtime, deadline, VIP, snooze, vacation, scheduler, Notification Center (schema v3, tasks got due_at + sender) | Done in mocks (21 tests), UNVERIFIED |
-| 4 | Skill Framework: opt-in loader, manifest validation, capability risk floors, command routing, approval dispatch, quick_note and task_list examples | Code complete, CI verified; Windows verification pending (#11); task_list CI verification pending |
+| 4 | Skill Framework: opt-in loader, manifest validation, capability risk floors, command routing, approval dispatch, quick_note and task_list examples | Code complete, CI verified; Windows verification pending (#11); task_list: CI verified, Windows verification pending |
 | 5 | AI Provider Layer (Groq -> Gemini -> GitHub Models), JSON proposals via Pydantic | Planned |
 | 6 | Discord bot with approve/cancel buttons (owner User ID only), OpenClaw migration | Planned |
 | 7+ | Task Engine, Brain Dump, Morning SITREP, Voice (faster-whisper), File/Screenshot intelligence | Planned |
