@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -230,7 +231,7 @@ def _load_validated_backup(
         if not isinstance(content, str) or not isinstance(digest, str):
             raise ValueError(f"backup entry is invalid: {name}")
         actual_digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
-        if not hashlib.compare_digest(actual_digest, digest):
+        if not hmac.compare_digest(actual_digest, digest):
             raise ValueError(f"backup checksum mismatch: {name}")
         _validate_config_content(name, content)
     return payload
@@ -349,6 +350,14 @@ def execute_approved_config_restore(
         details = json.loads(row["details"])
         backup_name = details["backup_name"]
         payload = _load_validated_backup(backup_name, Path(backup_dir).resolve(strict=True))
+        execute(
+            """
+            UPDATE action_log SET status = 'started', actor = 'config_restore'
+            WHERE id = (SELECT action_log_id FROM approvals WHERE id = ?)
+            """,
+            (approval_id,),
+            db_path,
+        )
         rollback_path = _restore_validated_backup(
             payload,
             config_dir=Path(config_dir),
