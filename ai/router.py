@@ -2,8 +2,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Mapping
-from typing import Sequence
+from collections.abc import Mapping, Sequence
 
 from ai.privacy import redact_private_data
 from ai.providers import AIProvider, EnvironmentStubProvider, ProviderError, ProviderResult
