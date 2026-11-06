@@ -378,7 +378,7 @@ def test_action_preview_includes_target_risk_and_approval_requirement(tmp_path):
     manifest_path.write_text(
         manifest.replace(
             'capabilities = ["process_control"]',
-            'capabilities = ["process_control"]\\ntarget_paths = ["data/tasks/tasks.md"]',
+            'capabilities = ["process_control"]\ntarget_paths = ["data/tasks/tasks.md"]',
         ),
         encoding="utf-8",
     )
@@ -409,7 +409,7 @@ def test_manifest_preview_rejects_target_path_traversal(tmp_path):
     manifest_path.write_text(
         manifest.replace(
             'capabilities = ["notify"]',
-            'capabilities = ["notify"]\\ntarget_paths = ["data/../outside.txt"]',
+            'capabilities = ["notify"]\ntarget_paths = ["data/../outside.txt"]',
         ),
         encoding="utf-8",
     )
