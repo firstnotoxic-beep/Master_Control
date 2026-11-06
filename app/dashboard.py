@@ -11,6 +11,13 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from core.alerts import AlertEngine, acknowledge_alert, snooze_alert
+from core.audit import query_action_log
+from core.config_backup import (
+    create_config_backup,
+    execute_approved_config_restore,
+    list_config_backups,
+    request_config_restore,
+)
 from core.approval import approve, cancel, pending
 from core.commands import handle_command
 from core.db import DEFAULT_DB_PATH, fetch_all, init_db
@@ -97,6 +104,40 @@ st.dataframe(
     )
 )
 
+st.subheader("Config Backups")
+if st.button("Create config backup"):
+    try:
+        backup_path = create_config_backup()
+        st.success(f"Created backup: {backup_path.name}")
+    except (OSError, TypeError, ValueError, RuntimeError) as error:
+        st.error(f"Config backup failed: {error}")
+try:
+    available_backups = list_config_backups()
+except (OSError, ValueError) as error:
+    available_backups = []
+    st.error(f"Cannot list config backups: {error}")
+if available_backups:
+    selected_backup = st.selectbox(
+        "Config backup to restore",
+        [path.name for path in available_backups],
+    )
+    if st.button("Request restore approval"):
+        try:
+            approval_id = request_config_restore(selected_backup, DEFAULT_DB_PATH)
+            st.info(
+                f"Restore request #{approval_id} created. Approve it in Pending Approvals."
+            )
+        except (OSError, TypeError, ValueError, RuntimeError) as error:
+            st.error(f"Restore request failed: {error}")
+else:
+    st.caption("No validated config backups are available.")
+if "config_restore_result" in st.session_state:
+    restore_result = st.session_state["config_restore_result"]
+    if restore_result.get("ok"):
+        st.success(restore_result["message"])
+    else:
+        st.error(restore_result["message"])
+
 st.subheader("Pending Approvals")
 for item in pending(DEFAULT_DB_PATH):
     with st.container(border=True):
@@ -115,6 +156,10 @@ for item in pending(DEFAULT_DB_PATH):
                 st.session_state["mode_result"] = result
             elif item["action"].startswith("skill."):
                 st.session_state["skill_result"] = execute_approved_skill(item["id"], DEFAULT_DB_PATH)
+            elif item["action"] == "config_restore":
+                st.session_state["config_restore_result"] = execute_approved_config_restore(
+                    item["id"], DEFAULT_DB_PATH
+                )
             elif item["action"] == "restore_mode":
                 import json
 
@@ -151,10 +196,38 @@ for alert in active_alerts:
             st.rerun()
 st.dataframe(alert_engine.history())
 
-st.subheader("Action Log")
-st.dataframe(
-    fetch_all("SELECT * FROM action_log ORDER BY id DESC", db_path=DEFAULT_DB_PATH)
+st.subheader("Action Log / Audit Timeline")
+audit_from = st.text_input("From date (YYYY-MM-DD)", key="audit-from-date")
+audit_to = st.text_input("To date (YYYY-MM-DD)", key="audit-to-date")
+audit_skill = st.text_input("Skill name (optional)", key="audit-skill")
+audit_result = st.selectbox(
+    "Result",
+    [
+        "All",
+        "pending_approval",
+        "approved",
+        "cancelled",
+        "expired",
+        "started",
+        "completed",
+        "failed",
+        "refused",
+    ],
+    key="audit-result",
 )
+try:
+    st.dataframe(
+        query_action_log(
+            DEFAULT_DB_PATH,
+            date_from=audit_from or None,
+            date_to=audit_to or None,
+            skill=audit_skill or None,
+            result=None if audit_result == "All" else audit_result,
+            limit=200,
+        )
+    )
+except (TypeError, ValueError) as error:
+    st.error(f"Invalid audit filters: {error}")
 
 if "mode_result" in st.session_state:
     st.subheader("Mode result")
