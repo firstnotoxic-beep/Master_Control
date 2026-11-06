@@ -9,6 +9,7 @@ id = "capture"
 description = "Capture free-text as a new timestamped local note."
 risk = "SAFE"
 capabilities = ["file_write"]
+target_paths = ["data/brain_dump/{generated_filename}"]
 
 [actions.params]
 text = "str"
@@ -18,6 +19,7 @@ id = "list"
 description = "List the latest local brain dump notes."
 risk = "LOW"
 capabilities = ["file_read"]
+target_paths = ["data/brain_dump/"]
 
 [actions.params]
 limit = "int"
@@ -27,6 +29,7 @@ id = "search"
 description = "Search local brain dump notes by case-insensitive keyword."
 risk = "LOW"
 capabilities = ["file_read"]
+target_paths = ["data/brain_dump/"]
 
 [actions.params]
 keyword = "str"
