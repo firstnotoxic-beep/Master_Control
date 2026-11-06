@@ -1,10 +1,13 @@
-# สร้าง อนุมัติ และยกเลิกคำขอ พร้อมบันทึกผู้ตัดสินใจ
+# สร้าง อนุมัติ ยกเลิก และหมดอายุคำขออนุมัติ
 from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+import sqlite3
 
 from core.db import DEFAULT_DB_PATH, fetch_all, get_connection, init_db
+
+APPROVAL_TTL_HOURS = 24
 
 
 def create_approval(
@@ -33,6 +36,34 @@ def create_approval(
         return approval_id or 0
 
 
+def _expire_stale_approvals(connection: sqlite3.Connection) -> int:
+    """Expire requests older than the fixed TTL without a schema migration."""
+    expired_at = datetime.now(UTC).isoformat()
+    rows = connection.execute(
+        """
+        SELECT id, action_log_id
+        FROM approvals
+        WHERE status = 'pending'
+          AND datetime(created_at) <= datetime('now', ?)
+        """,
+        (f"-{APPROVAL_TTL_HOURS} hours",),
+    ).fetchall()
+    for row in rows:
+        connection.execute(
+            """
+            UPDATE approvals
+            SET status = 'expired', decided_by = 'system', decided_at = ?
+            WHERE id = ? AND status = 'pending'
+            """,
+            (expired_at, row["id"]),
+        )
+        connection.execute(
+            "UPDATE action_log SET status = 'expired', actor = 'system' WHERE id = ?",
+            (row["action_log_id"],),
+        )
+    return len(rows)
+
+
 def _decide(
     approval_id: int,
     status: str,
@@ -40,27 +71,34 @@ def _decide(
     db_path: str | Path,
 ) -> None:
     decided_at = datetime.now(UTC).isoformat()
+    expired = False
     with get_connection(db_path) as connection:
+        _expire_stale_approvals(connection)
         approval = connection.execute(
             "SELECT action_log_id, status FROM approvals WHERE id = ?",
             (approval_id,),
         ).fetchone()
         if approval is None:
             raise ValueError("ไม่พบคำขออนุมัติ")
-        if approval["status"] != "pending":
+        if approval["status"] == "expired":
+            expired = True
+        elif approval["status"] != "pending":
             raise ValueError("คำขอนี้ถูกตัดสินใจไปแล้ว")
-        connection.execute(
-            """
-            UPDATE approvals
-            SET status = ?, decided_by = ?, decided_at = ?
-            WHERE id = ?
-            """,
-            (status, decided_by, decided_at, approval_id),
-        )
-        connection.execute(
-            "UPDATE action_log SET status = ?, actor = ? WHERE id = ?",
-            (status, decided_by, approval["action_log_id"]),
-        )
+        else:
+            connection.execute(
+                """
+                UPDATE approvals
+                SET status = ?, decided_by = ?, decided_at = ?
+                WHERE id = ?
+                """,
+                (status, decided_by, decided_at, approval_id),
+            )
+            connection.execute(
+                "UPDATE action_log SET status = ?, actor = ? WHERE id = ?",
+                (status, decided_by, approval["action_log_id"]),
+            )
+    if expired:
+        raise ValueError("คำขออนุมัติหมดอายุแล้ว กรุณาสร้างคำขอใหม่")
 
 
 def approve(
@@ -80,6 +118,8 @@ def cancel(
 
 
 def pending(db_path: str | Path = DEFAULT_DB_PATH) -> list:
+    with get_connection(db_path) as connection:
+        _expire_stale_approvals(connection)
     return fetch_all(
         """
         SELECT approvals.id, approvals.status, approvals.requested_by,
