@@ -8,9 +8,9 @@ import stat
 import sys
 import tempfile
 import tomllib
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
-from collections.abc import Sequence
 
 from core.db import DEFAULT_DB_PATH, SCHEMA_VERSION
 from core.skills import DEFAULT_SKILLS_DIR, SkillRegistry
