@@ -33,11 +33,12 @@ def submit_action_proposal(
         action_id,
         proposal.parameters,
     )
-    preview = active_registry.preview_action(
-        skill_name,
-        action_id,
-        proposal.parameters,
-    )
+    preview = {
+        "action": prepared.action_key,
+        "capabilities": list(prepared.capabilities),
+        "risk": prepared.risk.value,
+        "approval_required": requires_approval(prepared.action_key),
+    }
 
     if prepared.risk == RiskLevel.CRITICAL:
         return {
