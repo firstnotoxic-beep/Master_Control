@@ -9,6 +9,7 @@ id = "add"
 description = "Add a task to the local Markdown list."
 risk = "SAFE"
 capabilities = ["file_write"]
+target_paths = ["data/tasks/tasks.md"]
 
 [actions.params]
 description = "str"
@@ -18,12 +19,14 @@ id = "list"
 description = "List tasks from the local Markdown file."
 risk = "LOW"
 capabilities = ["file_read"]
+target_paths = ["data/tasks/tasks.md"]
 
 [[actions]]
 id = "done"
 description = "Mark a task as completed."
 risk = "SAFE"
 capabilities = ["file_write"]
+target_paths = ["data/tasks/tasks.md"]
 
 [actions.params]
 task_id = "int"
@@ -33,6 +36,7 @@ id = "remove"
 description = "Remove a task from the local Markdown list."
 risk = "SAFE"
 capabilities = ["file_write"]
+target_paths = ["data/tasks/tasks.md"]
 
 [actions.params]
 task_id = "int"
