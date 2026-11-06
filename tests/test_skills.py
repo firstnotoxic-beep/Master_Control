@@ -368,3 +368,52 @@ def test_enable_persists_in_skill_state(tmp_path):
     row = fetch_one("SELECT enabled, version FROM skill_state WHERE name = 'enable_me'", db_path=db)
     assert row["enabled"] == 1
     assert row["version"] == "1.0.0"
+
+
+def test_action_preview_includes_target_risk_and_approval_requirement(tmp_path):
+    root = tmp_path / "skills"
+    folder = make_skill(root, "previewable", risk="SAFE", capabilities=["process_control"])
+    manifest_path = folder / "skill.toml"
+    manifest = manifest_path.read_text(encoding="utf-8")
+    manifest_path.write_text(
+        manifest.replace(
+            'capabilities = ["process_control"]',
+            'capabilities = ["process_control"]\\ntarget_paths = ["data/tasks/tasks.md"]',
+        ),
+        encoding="utf-8",
+    )
+    config = tmp_path / "config" / "skills.toml"
+    write_config(config, ["previewable"])
+    registry = SkillRegistry(root, config, tmp_path / "db.sqlite")
+
+    skill_preview = registry.preview("previewable")["actions"][0]
+    action_preview = registry.preview_action(
+        "previewable", "go", {"value": "safe"}
+    )
+
+    assert skill_preview["declared_risk"] == "SAFE"
+    assert skill_preview["final_risk"] == "MEDIUM"
+    assert skill_preview["approval_required"] is True
+    assert skill_preview["target_paths"] == ["data/tasks/tasks.md"]
+    assert action_preview["capabilities"] == ["process_control"]
+    assert action_preview["risk"] == "MEDIUM"
+    assert action_preview["approval_required"] is True
+    assert action_preview["target_paths"] == ["data/tasks/tasks.md"]
+
+
+def test_manifest_preview_rejects_target_path_traversal(tmp_path):
+    root = tmp_path / "skills"
+    folder = make_skill(root, "bad_target")
+    manifest_path = folder / "skill.toml"
+    manifest = manifest_path.read_text(encoding="utf-8")
+    manifest_path.write_text(
+        manifest.replace(
+            'capabilities = ["notify"]',
+            'capabilities = ["notify"]\\ntarget_paths = ["data/../outside.txt"]',
+        ),
+        encoding="utf-8",
+    )
+    registry = SkillRegistry(root, tmp_path / "config" / "skills.toml", tmp_path / "db.sqlite")
+
+    with pytest.raises(ValueError):
+        registry.preview("bad_target")
