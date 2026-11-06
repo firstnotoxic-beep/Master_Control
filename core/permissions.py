@@ -15,6 +15,7 @@ ACTION_RISK: dict[str, RiskLevel] = {
     "test_medium": RiskLevel.MEDIUM, "gaming_mode": RiskLevel.MEDIUM,
     "focus_mode": RiskLevel.MEDIUM, "restore_mode": RiskLevel.MEDIUM,
     "mode_status": RiskLevel.SAFE, "top_processes": RiskLevel.SAFE,
+    "config_restore": RiskLevel.HIGH,
 }
 _ORDER = {RiskLevel.SAFE: 0, RiskLevel.LOW: 1, RiskLevel.MEDIUM: 2, RiskLevel.HIGH: 3, RiskLevel.CRITICAL: 4}
 CAPABILITY_MINIMUM_RISK = {
