@@ -1,7 +1,6 @@
 # ทดสอบ Audit Timeline, config recovery และ failure handling
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
@@ -269,3 +268,10 @@ def test_fallback_failure_log_stops_at_size_limit_without_truncating(tmp_path, m
         registry._write_plain_failure_log("skill.demo.run", "failure")
 
     assert log_path.read_text(encoding="utf-8") == original
+
+
+def test_config_restore_is_registered_as_high_risk():
+    from core.permissions import RiskLevel, requires_approval, risk_for_action
+
+    assert risk_for_action("config_restore") == RiskLevel.HIGH
+    assert requires_approval("config_restore") is True
