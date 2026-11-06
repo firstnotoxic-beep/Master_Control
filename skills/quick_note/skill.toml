@@ -8,6 +8,7 @@ id = "save"
 description = "Save a Markdown note."
 risk = "SAFE"
 capabilities = ["file_write"]
+target_paths = ["data/notes/{filename}"]
 
 [actions.params]
 filename = "str"
