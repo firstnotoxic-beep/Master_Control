@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -28,11 +29,15 @@ def _run_worker() -> str:
     if str(repository_root) not in sys.path:
         sys.path.insert(0, str(repository_root))
 
+    for skill_name in SKILLS:
+        source = repository_root / "skills" / skill_name
+        target = Path("skills") / skill_name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(source, target)
+
     from core import skills as skills_module
     from core.permissions import unregister_skill_actions
 
-    old_skills_dir = skills_module.DEFAULT_SKILLS_DIR
-    old_config_path = skills_module.DEFAULT_CONFIG_PATH
     old_failure_log = skills_module.DEFAULT_FAILURE_LOG_PATH
     database = Path("data/mastercontrol.db")
 
@@ -42,8 +47,6 @@ def _run_worker() -> str:
         "Database: temporary data/mastercontrol.db",
     ]
     try:
-        skills_module.DEFAULT_SKILLS_DIR = repository_root / "skills"
-        skills_module.DEFAULT_CONFIG_PATH = Path("config/skills.toml")
         skills_module.DEFAULT_FAILURE_LOG_PATH = Path("data/logs/skill-failures.log")
 
         from core.commands import handle_command
@@ -90,8 +93,6 @@ def _run_worker() -> str:
         transcript.append("Isolation check: all demo data stayed under the temporary workspace.")
         return "\n".join(transcript)
     finally:
-        skills_module.DEFAULT_SKILLS_DIR = old_skills_dir
-        skills_module.DEFAULT_CONFIG_PATH = old_config_path
         skills_module.DEFAULT_FAILURE_LOG_PATH = old_failure_log
         unregister_skill_actions("skill.")
 
