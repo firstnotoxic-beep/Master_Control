@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -128,7 +129,7 @@ def main() -> int:
     try:
         transcript = _run_worker() if "--worker" in sys.argv[1:] else run_demo()
         print(transcript)
-    except Exception as error:
+    except (OSError, RuntimeError, TypeError, ValueError, sqlite3.Error, KeyError, IndexError) as error:
         print(f"DEMO FAILED: {error}", file=sys.stderr)
         return 1
     return 0
