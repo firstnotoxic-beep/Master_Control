@@ -59,9 +59,11 @@ def _safe_directory(path: Path, *, parent: Path | None = None) -> Path:
 def _safe_config_path(name: str, config_dir: Path) -> Path:
     if name not in ALLOWED_CONFIG_FILES:
         raise ValueError("config file is not on the backup allowlist")
-    if _is_link_or_reparse(config_dir):
-        raise ValueError("config directory cannot be a symlink or reparse point")
+    if _is_link_or_reparse(config_dir) or _is_link_or_reparse(config_dir.parent):
+        raise ValueError("config directory path cannot contain a symlink or reparse point")
     root = config_dir.resolve(strict=False)
+    if root.parent != config_dir.parent.resolve(strict=False):
+        raise ValueError("config directory must remain inside the repository root")
     target = root / name
     if _is_link_or_reparse(target):
         raise ValueError(f"config file cannot be a symlink or reparse point: {name}")
@@ -174,7 +176,11 @@ def list_config_backups(
         raise ValueError("backup directory cannot be a symlink or reparse point")
     if not root.exists():
         return []
+    if _is_link_or_reparse(root.parent):
+        raise ValueError("backup parent cannot be a symlink or reparse point")
     resolved = root.resolve(strict=True)
+    if resolved.parent != root.parent.resolve(strict=True):
+        raise ValueError("backup directory must remain inside its expected parent")
     files: list[Path] = []
     for entry in resolved.iterdir():
         if not _BACKUP_NAME.fullmatch(entry.name):
@@ -191,7 +197,13 @@ def _load_validated_backup(
 ) -> dict[str, Any]:
     if not isinstance(backup_name, str) or not _BACKUP_NAME.fullmatch(backup_name):
         raise ValueError("invalid config backup filename")
+    if _is_link_or_reparse(backup_dir) or _is_link_or_reparse(backup_dir.parent):
+        raise ValueError("backup directory path cannot contain a symlink or reparse point")
+    if not backup_dir.is_dir():
+        raise ValueError("backup directory does not exist")
     root = backup_dir.resolve(strict=True)
+    if root.parent != backup_dir.parent.resolve(strict=True):
+        raise ValueError("backup directory must remain inside its expected parent")
     target = root / backup_name
     if _is_link_or_reparse(target):
         raise ValueError("backup file cannot be a symlink or reparse point")
@@ -289,11 +301,18 @@ def _restore_validated_backup(
     # Preserve the current allowlisted config before replacing any existing file.
     rollback_payload = _snapshot_payload(config_dir, allow_empty=True)
     rollback_path = _write_backup_payload(rollback_payload, backup_dir)
+    originally_present = set(rollback_payload["files"])
     try:
         _apply_validated_payload(payload, config_dir)
     except Exception:
         try:
             _apply_validated_payload(rollback_payload, config_dir)
+            # Remove only allowlisted files that this restore created; never remove
+            # an existing file that was not part of the pre-restore snapshot.
+            for name in set(payload["files"]) - originally_present:
+                target = _safe_config_path(name, config_dir)
+                if target.exists() and target.is_file() and not _is_link_or_reparse(target):
+                    target.unlink()
         except Exception as rollback_error:
             raise RuntimeError(
                 f"config restore failed and rollback also failed; rollback snapshot: "
@@ -308,7 +327,7 @@ def request_config_restore(
     db_path: str | Path = DEFAULT_DB_PATH,
     backup_dir: str | Path = BACKUP_ROOT,
 ) -> int:
-    backup_root = Path(backup_dir).resolve(strict=True)
+    backup_root = Path(backup_dir)
     _load_validated_backup(backup_name, backup_root)
     details = json.dumps({"backup_name": backup_name}, sort_keys=True)
     return create_approval(
@@ -349,7 +368,7 @@ def execute_approved_config_restore(
     try:
         details = json.loads(row["details"])
         backup_name = details["backup_name"]
-        payload = _load_validated_backup(backup_name, Path(backup_dir).resolve(strict=True))
+        payload = _load_validated_backup(backup_name, Path(backup_dir))
         execute(
             """
             UPDATE action_log SET status = 'started', actor = 'config_restore'
