@@ -6,7 +6,7 @@ import json
 import sqlite3
 import sys
 from pathlib import Path
-from typing import Sequence
+from collections.abc import Sequence
 
 from core.commands import handle_command
 from core.db import DEFAULT_DB_PATH
