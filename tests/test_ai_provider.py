@@ -8,7 +8,7 @@ from pydantic import ValidationError
 
 from ai.models import ActionProposal
 from ai.privacy import redact_private_data
-from ai.providers import MockProvider, ProviderError
+from ai.providers import MockProvider
 from ai.router import NoProviderAvailable, ProviderRouter
 from core.ai_proposals import submit_action_proposal
 from core.approval import approve, pending
