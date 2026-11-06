@@ -9,7 +9,8 @@ import sys
 import tempfile
 import tomllib
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
+from collections.abc import Sequence
 
 from core.db import DEFAULT_DB_PATH, SCHEMA_VERSION
 from core.skills import DEFAULT_SKILLS_DIR, SkillRegistry
@@ -205,7 +206,7 @@ def _run_action_preview(
     skill_name, action_id = action.split(".", 1)
     payload = json.loads(arguments) if arguments.strip() else {}
     if not isinstance(payload, dict):
-        raise ValueError("Preview arguments must be a JSON object")
+        raise TypeError("Preview arguments must be a JSON object")
     registry = SkillRegistry(db_path=db_path)
     return registry.preview_action(skill_name, action_id, payload)
 
