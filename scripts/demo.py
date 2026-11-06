@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -21,13 +23,10 @@ SKILLS = {
 }
 
 
-def run_demo() -> str:
+def _run_worker() -> str:
     repository_root = Path(__file__).resolve().parents[1]
-    transcript = [
-        "MasterControl — isolated Skill Framework demo",
-        "Workspace: temporary directory (removed automatically)",
-        "Database: temporary data/mastercontrol.db",
-    ]
+    if str(repository_root) not in sys.path:
+        sys.path.insert(0, str(repository_root))
 
     from core import skills as skills_module
     from core.permissions import unregister_skill_actions
@@ -35,76 +34,101 @@ def run_demo() -> str:
     old_skills_dir = skills_module.DEFAULT_SKILLS_DIR
     old_config_path = skills_module.DEFAULT_CONFIG_PATH
     old_failure_log = skills_module.DEFAULT_FAILURE_LOG_PATH
-    original_directory = Path.cwd()
+    database = Path("data/mastercontrol.db")
 
+    transcript = [
+        "MasterControl — isolated Skill Framework demo",
+        "Workspace: temporary directory (removed after worker process exits)",
+        "Database: temporary data/mastercontrol.db",
+    ]
     try:
-        with tempfile.TemporaryDirectory(prefix="mastercontrol-demo-") as temporary:
-            workspace = Path(temporary)
-            os.chdir(workspace)
-            database = workspace / "data" / "mastercontrol.db"
-            skills_module.DEFAULT_SKILLS_DIR = repository_root / "skills"
-            skills_module.DEFAULT_CONFIG_PATH = workspace / "config" / "skills.toml"
-            skills_module.DEFAULT_FAILURE_LOG_PATH = (
-                workspace / "data" / "logs" / "skill-failures.log"
+        skills_module.DEFAULT_SKILLS_DIR = repository_root / "skills"
+        skills_module.DEFAULT_CONFIG_PATH = Path("config/skills.toml")
+        skills_module.DEFAULT_FAILURE_LOG_PATH = Path("data/logs/skill-failures.log")
+
+        from core.commands import handle_command
+
+        for skill_name, (action_id, parameters) in SKILLS.items():
+            preview = handle_command(f"skill enable {skill_name}", database)
+            if not preview.get("ok") or not preview.get("confirmation_required"):
+                raise RuntimeError(
+                    f"Could not preview {skill_name}: {preview.get('message', 'unknown error')}"
+                )
+            enabled = handle_command(
+                f"skill enable {skill_name} confirm", database
             )
-
-            from core.commands import handle_command
-
-            for skill_name, (action_id, parameters) in SKILLS.items():
-                preview = handle_command(f"skill enable {skill_name}", database)
-                if not preview.get("ok") or not preview.get("confirmation_required"):
-                    raise RuntimeError(
-                        f"Could not preview {skill_name}: {preview.get('message', 'unknown error')}"
-                    )
-                enabled = handle_command(
-                    f"skill enable {skill_name} confirm", database
-                )
-                if not enabled.get("ok"):
-                    raise RuntimeError(
-                        f"Could not enable {skill_name}: {enabled.get('message', 'unknown error')}"
-                    )
-
-                request = (
-                    f"run {skill_name}.{action_id} "
-                    f"{json.dumps(parameters, ensure_ascii=False)}"
-                )
-                result = handle_command(request, database)
-                if not result.get("ok") or result.get("approval_id"):
-                    raise RuntimeError(
-                        f"{skill_name}.{action_id} did not complete through the "
-                        f"configured SAFE/LOW path: {result.get('message', 'approval required')}"
-                    )
-                if not result.get("verified"):
-                    raise RuntimeError(
-                        f"{skill_name}.{action_id} did not pass Skill verification"
-                    )
-                transcript.append(
-                    f"[PASS] {skill_name}.{action_id}: {result.get('message', '')} "
-                    f"(risk={preview['preview']['actions'][0]['final_risk']}, "
-                    "approval=not required, verified=True)"
+            if not enabled.get("ok"):
+                raise RuntimeError(
+                    f"Could not enable {skill_name}: {enabled.get('message', 'unknown error')}"
                 )
 
+            request = (
+                f"run {skill_name}.{action_id} "
+                f"{json.dumps(parameters, ensure_ascii=False)}"
+            )
+            result = handle_command(request, database)
+            if not result.get("ok") or result.get("approval_id"):
+                raise RuntimeError(
+                    f"{skill_name}.{action_id} did not complete through the "
+                    f"configured SAFE/LOW path: {result.get('message', 'approval required')}"
+                )
+            if not result.get("verified"):
+                raise RuntimeError(
+                    f"{skill_name}.{action_id} did not pass Skill verification"
+                )
             transcript.append(
-                "Approval note: all four built-in demo actions are SAFE/LOW by their "
-                "manifests, so policy correctly does not request approval. MEDIUM+ "
-                "actions remain approval-gated in the dashboard."
+                f"[PASS] {skill_name}.{action_id}: {result.get('message', '')} "
+                f"(risk={preview['preview']['actions'][0]['final_risk']}, "
+                "approval=not required, verified=True)"
             )
-            transcript.append("Isolation check: all demo data stayed under the temporary workspace.")
+
+        transcript.append(
+            "Approval note: all four built-in demo actions are SAFE/LOW by their "
+            "manifests, so policy correctly does not request approval. MEDIUM+ "
+            "actions remain approval-gated in the dashboard."
+        )
+        transcript.append("Isolation check: all demo data stayed under the temporary workspace.")
+        return "\n".join(transcript)
     finally:
-        os.chdir(original_directory)
         skills_module.DEFAULT_SKILLS_DIR = old_skills_dir
         skills_module.DEFAULT_CONFIG_PATH = old_config_path
         skills_module.DEFAULT_FAILURE_LOG_PATH = old_failure_log
         unregister_skill_actions("skill.")
 
-    return "\n".join(transcript)
+
+def run_demo() -> str:
+    repository_root = Path(__file__).resolve().parents[1]
+    environment = os.environ.copy()
+    existing_pythonpath = environment.get("PYTHONPATH", "")
+    environment["PYTHONPATH"] = (
+        str(repository_root)
+        if not existing_pythonpath
+        else str(repository_root) + os.pathsep + existing_pythonpath
+    )
+
+    # The worker process owns all SQLite connections. Exiting it closes Windows
+    # file handles before the parent TemporaryDirectory removes the database.
+    with tempfile.TemporaryDirectory(prefix="mastercontrol-demo-") as temporary:
+        result = subprocess.run(
+            [sys.executable, "-m", "scripts.demo", "--worker"],
+            cwd=temporary,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            detail = result.stderr.strip() or result.stdout.strip()
+            raise RuntimeError(f"isolated demo worker failed: {detail}")
+        return result.stdout.strip()
 
 
 def main() -> int:
     try:
-        print(run_demo())
+        transcript = _run_worker() if "--worker" in sys.argv[1:] else run_demo()
+        print(transcript)
     except Exception as error:
-        print(f"DEMO FAILED: {error}")
+        print(f"DEMO FAILED: {error}", file=sys.stderr)
         return 1
     return 0
 
