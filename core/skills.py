@@ -69,6 +69,7 @@ class SkillActionManifest(BaseModel):
         "system_setting",
     ]] = Field(default_factory=list)
     params: dict[str, str] = Field(default_factory=dict)
+    target_paths: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_params(self) -> SkillActionManifest:
@@ -77,6 +78,15 @@ class SkillActionManifest(BaseModel):
                 raise ValueError(f"invalid parameter name: {field_name}")
             if field_type not in _PARAM_TYPES:
                 raise ValueError(f"unsupported parameter type for {field_name}: {field_type}")
+        for target_path in self.target_paths:
+            normalized = target_path.replace("\\", "/")
+            if (
+                not normalized.startswith("data/")
+                or normalized.startswith("/")
+                or any(part == ".." for part in normalized.split("/"))
+                or len(normalized) > 240
+            ):
+                raise ValueError("target_paths must be relative paths under data/")
         return self
 
 
@@ -302,6 +312,9 @@ class SkillRegistry:
                     "declared_risk": action.risk.value,
                     "final_risk": final_risk.value,
                     "risk_raised": final_risk != action.risk,
+                    "target_paths": list(action.target_paths),
+                    "approval_required": final_risk
+                    in {RiskLevel.MEDIUM, RiskLevel.HIGH, RiskLevel.CRITICAL},
                 }
             )
         return {
@@ -310,6 +323,20 @@ class SkillRegistry:
             "description": manifest.description,
             "enabled_by_default": manifest.enabled_by_default,
             "actions": actions,
+        }
+
+    def preview_action(
+        self, skill_name: str, action_id: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        prepared = self.prepare_action(skill_name, action_id, payload)
+        manifest, _module = self._loaded[skill_name]
+        action = next(item for item in manifest.actions if item.id == action_id)
+        return {
+            "action": prepared.action_key,
+            "capabilities": list(prepared.capabilities),
+            "risk": prepared.risk.value,
+            "target_paths": list(action.target_paths),
+            "approval_required": requires_approval(prepared.action_key),
         }
 
     def list_skills(self) -> list[dict[str, Any]]:
