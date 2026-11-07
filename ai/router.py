@@ -5,7 +5,12 @@ import os
 from collections.abc import Mapping, Sequence
 
 from ai.privacy import redact_private_data
-from ai.providers import AIProvider, EnvironmentStubProvider, ProviderError, ProviderResult
+from ai.providers import (
+    AIProvider,
+    EnvironmentStubProvider,
+    ProviderError,
+    ProviderResult,
+)
 
 PROVIDER_ORDER = ("groq", "gemini", "github_models")
 PROVIDER_ENV_KEYS = {
