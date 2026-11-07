@@ -13,8 +13,9 @@ import tempfile
 import tomllib
 import uuid
 from datetime import UTC, datetime
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 from core.approval import create_approval
 from core.db import DEFAULT_DB_PATH, execute, fetch_one
@@ -224,7 +225,7 @@ def _load_validated_backup(
     if payload["format_version"] != FORMAT_VERSION:
         raise ValueError("unsupported config backup format version")
     if not isinstance(payload["created_at"], str):
-        raise ValueError("backup timestamp is invalid")
+        raise TypeError("backup timestamp must be a string")
     try:
         datetime.fromisoformat(payload["created_at"])
     except ValueError as error:
@@ -241,7 +242,7 @@ def _load_validated_backup(
         content = entry["content"]
         digest = entry["sha256"]
         if not isinstance(content, str) or not isinstance(digest, str):
-            raise ValueError(f"backup entry is invalid: {name}")
+            raise TypeError(f"backup entry fields must be strings: {name}")
         actual_digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
         if not hmac.compare_digest(actual_digest, digest):
             raise ValueError(f"backup checksum mismatch: {name}")
@@ -405,7 +406,7 @@ def execute_approved_config_restore(
             "message": f"Restored config backup {backup_name}; current config saved as {rollback_path.name}",
             "rollback_backup": rollback_path.name,
         }
-    except Exception as error:
+    except Exception as error:  # noqa: BLE001 - every restore failure must be logged fail-closed
         message = str(error)[:1000]
         execute(
             """
