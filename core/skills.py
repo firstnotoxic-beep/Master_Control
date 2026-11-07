@@ -35,6 +35,7 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_SKILLS_DIR = Path("skills")
 DEFAULT_CONFIG_PATH = Path("config/skills.toml")
 DEFAULT_FAILURE_LOG_PATH = Path("data/logs/skill-failures.log")
+MAX_FAILURE_LOG_BYTES = 1_048_576
 _CAPABILITY_VALUES = {
     "file_read",
     "file_write",
@@ -393,8 +394,15 @@ class SkillRegistry:
             },
             ensure_ascii=False,
         )
+        encoded_record = (record + "\n").encode("utf-8")
+        current_size = log_path.stat().st_size if log_path.exists() else 0
+        if current_size + len(encoded_record) > MAX_FAILURE_LOG_BYTES:
+            raise OSError(
+                "fallback Skill failure log reached its 1 MiB safety limit; "
+                "archive it manually before writing more records"
+            )
         with log_path.open("a", encoding="utf-8") as log_file:
-            log_file.write(record + "\n")
+            log_file.write(encoded_record.decode("utf-8"))
 
     def _write_failure_log(self, action: str, message: str, risk: str = "HIGH") -> None:
         try:
