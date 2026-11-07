@@ -43,7 +43,7 @@ value = "str"
 from pathlib import Path
 
 def run(action_id, params):
-    Path("proposal-ran.txt").write_text(params["value"], encoding="utf-8")
+    Path("proposal-ran.txt").write_text(params.value, encoding="utf-8")
     return {"ok": True, "message": "proposal action ran"}
 
 def verify(action_id, params, result):
