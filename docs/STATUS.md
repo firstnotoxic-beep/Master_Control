@@ -2,8 +2,24 @@
 
 > This file records the repository's implementation and verification status. The roadmap describes intended work; it does not make planned features complete.
 
-## Constraint
-Owner cannot test on the target Windows machine for now. All results below are mock/sandbox or CI results unless explicitly marked VERIFIED on the owner's actual machine.
+## Verification policy
+The owner can now run manual checks on the target Windows 11 machine. This does not make every feature VERIFIED: only checks explicitly listed in the Windows verification log below are owner-PC verified. Mock/CI evidence remains separate.
+
+## Owner-PC Windows verification log — 2026-11-07
+Environment: Windows 11 PowerShell, Python 3.12.10, project `.venv`.
+
+Confirmed on the owner's PC:
+- `python -m pip install -r requirements.txt` completed successfully.
+- `ruff check .` passed; output: `All checks passed!`.
+- `pytest -q` passed: 81 passed, 4 skipped.
+- `python -c "from core.db import init_db; init_db()"` completed; subsequent diagnostics verified a reachable SQLite database, schema v4, and a readable/writable `action_log` probe.
+- `python -m core.diagnostics check` returned `WARN` (not FAIL). Database, schema_version (4), the transactional `action_log` write probe, `data/`, and all four Skill manifests passed. `data/notes/`, `data/tasks/`, `data/brain_dump/`, `data/reports/`, and `data/logs/` were WARN because the directories do not exist yet; diagnostics intentionally did not create them. Output reported `read_only=true` and `persistent_changes=false`.
+- The Streamlit dashboard launched using `streamlit run app/dashboard.py` and opened at `http://localhost:8501`.
+- Dashboard command smoke checks: `help` returned supported commands; `status` returned `ระบบพร้อมทำงาน`; `skills` returned `Skill registry loaded`. The owner confirmed the dashboard lists all four built-in Skills as installed and disabled by default.
+- Core task smoke check: `list tasks` returned 0 initially; `add task ทดสอบระบบ MasterControl` created Task ID 1; the dashboard displayed it as `pending`.
+- The `task_list` Skill enable review displayed its action capability/risk metadata. Enable was not confirmed and Skill actions were not run. Attempting `run task_list.done` while disabled was rejected with `skill is not enabled or did not load: task_list`; Task ID 1 remains pending.
+
+Not verified by this session: Windows toast/Discord notification delivery, telemetry accuracy against Task Manager/NVIDIA tools, process close/restore, alert scheduler and reminders, gaming/focus modes, existing-database v3→v4 data preservation, full Skill enable/run/disable behavior, file-path/reparse protections, MEDIUM+ approval behavior, audit filters, config backup/restore, and failure recovery. Do not mark the relevant phases fully VERIFIED from this partial pass.
 
 ## CI
 - Workflow: `.github/workflows/ci.yml`.
@@ -27,11 +43,11 @@ Owner cannot test on the target Windows machine for now. All results below are m
 
 | Phase | Scope | Status |
 |---|---|---|
-| 1 | Foundation: database, permissions, approval, commands, notifications, dashboard | Done in mocks; UNVERIFIED on the owner's Windows machine (including real Windows toast and existing Discord notification path) |
+| 1 | Foundation: database, permissions, approval, commands, notifications, dashboard | Partially verified on owner Windows PC (2026-11-07): Python environment, DB v4, dashboard launch, help/status/skills, and core task list/add; Windows toast and Discord delivery remain UNVERIFIED and other checks remain pending |
 | 2 | Telemetry, Process Monitor, Gaming/Focus Mode Engine, mode sessions (schema v2) | Done in mocks; UNVERIFIED on the owner's Windows machine |
-| 3 | Alert Engine: bedtime/deadline, VIP, snooze, vacation, scheduler, Notification Center (schema v3; task due_at and sender fields) | Done in mocks (21 tests); UNVERIFIED on the owner's Windows machine |
-| 4 | Skill Framework: opt-in loader, manifest validation, capability risk floors, command routing, approval dispatch, quick_note, task_list, brain_dump, daily_report | Code complete and CI verified; Windows verification pending (see Issue #11 and checklist below) |
-| 4.5 | Reliability & Security | PRs open, CI verified: diagnostics/action preview (#31), audit/backup/recovery (#32); Windows verification pending |
+| 3 | Alert Engine: bedtime/deadline, VIP, snooze, vacation, scheduler, Notification Center (schema v3; task due_at and sender fields) | Partially verified on owner Windows PC (2026-11-07): basic core task listing/creation only; reminders, alert delivery, scheduler, snooze/ack, and vacation behavior remain UNVERIFIED |
+| 4 | Skill Framework: opt-in loader, manifest validation, capability risk floors, command routing, approval dispatch, quick_note, task_list, brain_dump, daily_report | Code complete and CI verified; partially verified on owner Windows PC (2026-11-07): Ruff/pytest, registry load, and dashboard Skill visibility; full enable/run/disable, migration retention, filesystem protections, and approval/failure paths remain unverified |
+| 4.5 | Reliability & Security | Implementation from #31/#32 is on main and CI verified; partially verified on owner Windows PC (2026-11-07): read-only diagnostics only; action preview, audit, config recovery, and failure-path checks remain pending |
 | 5 | AI Provider & Intelligence: Provider Layer, Budget Manager, L0-L3 routing, AI Debate | Planned |
 | 6 | Agent Manager & Runtime Gate: Agent/Sub-Agent lifecycle and conditional OpenClaw Decision Gate | Planned |
 | 7 | Discord Integration: owner-verified commands, reports, and approval channel | Planned |
@@ -41,10 +57,10 @@ Owner cannot test on the target Windows machine for now. All results below are m
 
 The next development priority is Phase 4.5, in the order described by `docs/THE_GRID_MASTER_PLAN.md`. Phase 5 and later work must not be represented as implemented until their code and verification evidence exist.
 
-## Pending real-machine checks (do when back at the PC)
+## Remaining real-machine checks
 
 ### Phase 1
-- [ ] Run `pytest -q`; confirm the dashboard opens.
+- [x] Run `pytest -q`; confirm the dashboard opens. On 2026-11-07: 81 passed, 4 skipped; `app/dashboard.py` launched successfully on the owner's Windows PC.
 - [ ] Confirm notifications arrive as a Windows toast and through the existing Discord notification path.
 - [ ] Confirm any health endpoint binds to `127.0.0.1` only, or is removed.
 - [ ] Confirm `.env` is gitignored and no webhook URL is present in the repository.
@@ -63,18 +79,18 @@ The next development priority is Phase 4.5, in the order described by `docs/THE_
 - [ ] Confirm snooze works and vacation mode silences bedtime reminders.
 - [ ] Confirm only one scheduler instance runs and idle CPU use is near zero.
 
-### Phase 4.5 (PRs open; CI verified, Windows verification pending)
+### Phase 4.5 (CI verified; partial Windows verification)
 
 Implementation is proposed in [PR #31 — diagnostics and action preview](https://github.com/firstnotoxic-beep/Master_Control/pull/31) and [PR #32 — audit timeline and config recovery](https://github.com/firstnotoxic-beep/Master_Control/pull/32). These PRs are not merged. Their Windows CI runs passed; the checks below still require owner-PC verification.
 
-- [ ] Run `python -m core.diagnostics check` on the target PC; confirm the reported DB/schema, data-folder, Skill-manifest, and action-log results match the machine. Confirm probes leave no persistent files or action-log rows.
+- [x] Run `python -m core.diagnostics check` on 2026-11-07. Result: WARN (database, schema v4, action_log probe, data/, and four manifests PASS; five optional Skill data directories WARN because they do not exist). Output reports `read_only=true` and `persistent_changes=false`; temporary probes are removed and the action-log probe is rolled back.
 - [ ] Preview an enabled Skill action; confirm capability, effective risk, target paths, and approval requirement are displayed, and that preview does not execute the Skill.
 - [ ] Use the dashboard audit filters for date range, Skill, and result; confirm returned rows and the row limit are correct.
 - [ ] Create a config backup, then request and approve a HIGH-risk restore; confirm the current config is backed up before replacement, rollback is available, corrupt backups are rejected, and `.env` is never included.
 - [ ] Verify expired approvals cannot be approved, a Skill crash is left failed and disabled, action-log write failure blocks Skill execution, and the fallback log refuses writes beyond its size limit without truncating prior evidence.
 
 ### Phase 4
-- [ ] Run `pytest -q` and `ruff check .` on Python 3.11+ with the existing dependencies.
+- [x] Run `pytest -q` and `ruff check .` on Python 3.12.10 with the existing dependencies on 2026-11-07: 81 passed, 4 skipped; Ruff reported all checks passed.
 - [ ] Verify schema migration v3->v4 preserves existing tasks, approvals, and action_log rows.
 - [ ] Confirm no Skill loads unless listed in `config/skills.toml`; malformed manifests are skipped.
 - [ ] Review each Skill source before enabling; confirm capability floors are raised and logged.
@@ -84,7 +100,7 @@ Implementation is proposed in [PR #31 — diagnostics and action preview](https:
 - [ ] Confirm brain_dump list/search behavior, input limits, empty-search rejection, and fail-closed action-log behavior.
 - [ ] Confirm daily_report reads tasks, date-matched brain_dump notes, and action_log without modifying source data; missing/empty sources show no data.
 - [ ] Confirm daily_report date validation, one-report-per-date overwrite behavior, path/reparse protection, and fail-closed action-log behavior.
-- [ ] Verify the dashboard lists installed/enabled Skills, capability/risk summaries, last errors, and enable/disable controls.
+- [ ] Verify the dashboard lists capability/risk summaries, last errors, and enable/disable controls. Partial check only: the owner confirmed all four built-in Skills appear installed and disabled by default; full controls and error-state behavior remain unverified.
 - [ ] Test enable/disable persistence across dashboard restart.
 - [ ] Confirm Python Skill code is treated as trusted local code, not an OS sandbox.
 
