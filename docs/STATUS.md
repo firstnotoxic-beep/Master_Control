@@ -31,7 +31,7 @@ Owner cannot test on the target Windows machine for now. All results below are m
 | 2 | Telemetry, Process Monitor, Gaming/Focus Mode Engine, mode sessions (schema v2) | Done in mocks; UNVERIFIED on the owner's Windows machine |
 | 3 | Alert Engine: bedtime/deadline, VIP, snooze, vacation, scheduler, Notification Center (schema v3; task due_at and sender fields) | Done in mocks (21 tests); UNVERIFIED on the owner's Windows machine |
 | 4 | Skill Framework: opt-in loader, manifest validation, capability risk floors, command routing, approval dispatch, quick_note, task_list, brain_dump, daily_report | Code complete and CI verified; Windows verification pending (see Issue #11 and checklist below) |
-| 4.5 | Reliability & Security | Planned next priority; no completion or Windows verification is claimed |
+| 4.5 | Reliability & Security | PRs open, CI verified: diagnostics/action preview (#31), audit/backup/recovery (#32); Windows verification pending |
 | 5 | AI Provider & Intelligence: Provider Layer, Budget Manager, L0-L3 routing, AI Debate | Planned |
 | 6 | Agent Manager & Runtime Gate: Agent/Sub-Agent lifecycle and conditional OpenClaw Decision Gate | Planned |
 | 7 | Discord Integration: owner-verified commands, reports, and approval channel | Planned |
@@ -62,6 +62,16 @@ The next development priority is Phase 4.5, in the order described by `docs/THE_
 - [ ] Set a task due in one hour and confirm Warning behavior repeats until acknowledged.
 - [ ] Confirm snooze works and vacation mode silences bedtime reminders.
 - [ ] Confirm only one scheduler instance runs and idle CPU use is near zero.
+
+### Phase 4.5 (PRs open; CI verified, Windows verification pending)
+
+Implementation is proposed in [PR #31 — diagnostics and action preview](https://github.com/firstnotoxic-beep/Master_Control/pull/31) and [PR #32 — audit timeline and config recovery](https://github.com/firstnotoxic-beep/Master_Control/pull/32). These PRs are not merged. Their Windows CI runs passed; the checks below still require owner-PC verification.
+
+- [ ] Run `python -m core.diagnostics check` on the target PC; confirm the reported DB/schema, data-folder, Skill-manifest, and action-log results match the machine. Confirm probes leave no persistent files or action-log rows.
+- [ ] Preview an enabled Skill action; confirm capability, effective risk, target paths, and approval requirement are displayed, and that preview does not execute the Skill.
+- [ ] Use the dashboard audit filters for date range, Skill, and result; confirm returned rows and the row limit are correct.
+- [ ] Create a config backup, then request and approve a HIGH-risk restore; confirm the current config is backed up before replacement, rollback is available, corrupt backups are rejected, and `.env` is never included.
+- [ ] Verify expired approvals cannot be approved, a Skill crash is left failed and disabled, action-log write failure blocks Skill execution, and the fallback log refuses writes beyond its size limit without truncating prior evidence.
 
 ### Phase 4
 - [ ] Run `pytest -q` and `ruff check .` on Python 3.11+ with the existing dependencies.
