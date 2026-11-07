@@ -5,8 +5,8 @@ import argparse
 import json
 import sqlite3
 import sys
-from pathlib import Path
 from collections.abc import Sequence
+from pathlib import Path
 
 from core.commands import handle_command
 from core.db import DEFAULT_DB_PATH
