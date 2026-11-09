@@ -135,7 +135,7 @@ PR #33 เพิ่มรากฐาน Phase 5 แล้ว ได้แก่
 ขอบเขตที่ต้องเข้าใจให้ตรงกัน:
 
 - Provider stubs สำหรับ Groq, Gemini และ GitHub Models ยังไม่ใช่ API client และไม่ส่ง network request
-- ActionProposal ปัจจุบันจำกัดรูปแบบ action ให้อยู่ใน namespace skill.<name>.<action>; Core ตรวจ enabled Skill manifest และส่งต่อผ่าน executor เดิม
+- ActionProposal ปัจจุบันจำกัดรูปแบบ action ให้อยู่ใน namespace สำหรับ Action Skill เท่านั้น; ไม่รับ shell command หรือ action นอก manifest; Core ตรวจ enabled Skill manifest และส่งต่อผ่าน executor เดิม
 - MEDIUM/HIGH สร้าง approval request; CRITICAL ถูกปฏิเสธ; SAFE/LOW จึงอาจทำงานผ่าน Skill executor หลัง validation/permission
 - Privacy redaction ปัจจุบันเป็นการ redact จากชื่อ field ที่รู้จัก ไม่ใช่ระบบตรวจจับข้อมูลส่วนบุคคลได้ครบทุกแบบ
 - การมี ProviderRouter หรือ API key ใน environment ไม่ได้แปลว่า Provider นั้นพร้อมใช้งานจริง
