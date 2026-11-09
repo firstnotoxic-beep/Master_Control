@@ -31,8 +31,8 @@ Not verified by this session: Windows toast/Discord notification delivery, telem
 ## Architecture and project decisions
 - **The Grid** is the overall personal AI ecosystem. **MasterControl** is its central control plane and security authority; Agent Runtime components are subordinate workers, not authorities.
 - All actions must follow: validate -> permission -> approval (when required) -> execute -> verify -> log. LLMs and Agents do not grant permissions or approve actions.
-- **Skills** are local Python extensions running in the same process as MasterControl. They are not an OS sandbox; capability declarations are permission metadata, not isolation. Skills remain opt-in.
-- **AI Provider Layer, Budget Manager, and AI Debate** are planned MasterControl capabilities for Phase 5. Candidate free providers include Groq, Gemini, and GitHub Models; actual support and quota behavior must be verified when implemented. Local LLM is not the default; any local option remains optional and off during gaming.
+- **Skills (current implementation):** Skills are local Python extensions running in the same process as MasterControl. They are not an OS sandbox; capability declarations are permission metadata, not isolation. Skills remain opt-in. The Hybrid model (Markdown-only Instruction Skills and Markdown + TOML + Python Action Skills) is planned for Phase 4.6; it is not implemented yet. SKILL.md must never grant permissions or bypass the existing Security Core.
+- **Phase 5 AI groundwork (PR #33 merged; CI verified):** the repository now has an AI Provider protocol, deterministic MockProvider, configuration-only stubs for Groq/Gemini/GitHub Models, ProviderRouter, strict Pydantic ActionProposal validation, Core-owned Skill proposal submission, and default private-field redaction. The provider stubs do not make API/network requests. Live provider clients, Budget Manager, completed L0–L3 routing, and AI Debate remain unimplemented. Provider terms, support, and quotas must be checked when implementation begins. Local LLM is not the default; any local option remains optional and off during gaming.
 - **OpenClaw** is a conditional Agent Runtime candidate for Phase 6, not the security authority and not a required dependency. Integration is blocked until the OpenClaw Decision Gate in the master plan is passed. Read-only evaluation does not authorize action tools.
 - **Discord** is a communication and approval channel planned separately in Phase 7; it is not the Agent Runtime. Existing notification checks in Phase 1 do not mean the planned command/approval bot is complete.
 - BIOS-based Auto-Boot was dropped. Morning SITREP belongs to the planned Proactive Intelligence work in Phase 8; it is not recorded here as a completed feature.
@@ -47,15 +47,15 @@ Not verified by this session: Windows toast/Discord notification delivery, telem
 | 2 | Telemetry, Process Monitor, Gaming/Focus Mode Engine, mode sessions (schema v2) | Done in mocks; UNVERIFIED on the owner's Windows machine |
 | 3 | Alert Engine: bedtime/deadline, VIP, snooze, vacation, scheduler, Notification Center (schema v3; task due_at and sender fields) | Partially verified on owner Windows PC (2026-11-07): basic core task listing/creation only; reminders, alert delivery, scheduler, snooze/ack, and vacation behavior remain UNVERIFIED |
 | 4 | Skill Framework: opt-in loader, manifest validation, capability risk floors, command routing, approval dispatch, quick_note, task_list, brain_dump, daily_report | Code complete and CI verified; partially verified on owner Windows PC (2026-11-07): Ruff/pytest, registry load, and dashboard Skill visibility; full enable/run/disable, migration retention, filesystem protections, and approval/failure paths remain unverified |
-| 4.5 | Reliability & Security | Implementation from #31/#32 is on main and CI verified; partially verified on owner Windows PC (2026-11-07): read-only diagnostics only; action preview, audit, config recovery, and failure-path checks remain pending |
-| 5 | AI Provider & Intelligence: Provider Layer, Budget Manager, L0-L3 routing, AI Debate | Planned |
+| 4.5 | Reliability & Security | Implementation from PR #31/#32 is merged to main and CI verified; partially verified on owner Windows PC (2026-11-07): diagnostics only; action preview, audit, config recovery, and failure-path checks remain pending |
+| 5 | AI Provider & Intelligence: Provider Layer, Budget Manager, L0-L3 routing, AI Debate | Foundation merged in PR #33 and CI verified; live Provider clients, Budget Manager, full routing and AI Debate remain planned |
 | 6 | Agent Manager & Runtime Gate: Agent/Sub-Agent lifecycle and conditional OpenClaw Decision Gate | Planned |
 | 7 | Discord Integration: owner-verified commands, reports, and approval channel | Planned |
 | 8 | Proactive Intelligence: Task Engine, Morning SITREP, event/rule-based monitoring | Planned |
 | 9 | The Grid Desktop Experience: tray, hotkey/overlay, Notification Center, privacy/provider/budget/agent controls, file intelligence | Planned |
 | 10 | Ecosystem & Maintenance: versioning, compatibility, extension review, backup, recovery, and maintenance | Planned |
 
-The next development priority is Phase 4.5, in the order described by `docs/THE_GRID_MASTER_PLAN.md`. Phase 5 and later work must not be represented as implemented until their code and verification evidence exist.
+The immediate priority remains completing the pending owner-PC security/reliability checks for Phase 4.5 and the relevant Phase 1–4 checks below. After that, the next feature milestone is Phase 4.6 (Hybrid Skill Engine). Phase 5 has only the groundwork described above; live Provider clients, Budget Manager, full L0–L3 routing, and AI Debate must not be reported as implemented until their code and verification evidence exist.
 
 ## Remaining real-machine checks
 
@@ -81,7 +81,7 @@ The next development priority is Phase 4.5, in the order described by `docs/THE_
 
 ### Phase 4.5 (CI verified; partial Windows verification)
 
-Implementation is proposed in [PR #31 — diagnostics and action preview](https://github.com/firstnotoxic-beep/Master_Control/pull/31) and [PR #32 — audit timeline and config recovery](https://github.com/firstnotoxic-beep/Master_Control/pull/32). These PRs are not merged. Their Windows CI runs passed; the checks below still require owner-PC verification.
+Implementation landed in [PR #31 — diagnostics and action preview](https://github.com/firstnotoxic-beep/Master_Control/pull/31) and [PR #32 — audit timeline and config recovery](https://github.com/firstnotoxic-beep/Master_Control/pull/32); both PRs are merged to main and their Windows CI runs passed. The checks below still require owner-PC verification.
 
 - [x] Run `python -m core.diagnostics check` on 2026-11-07. Result: WARN (database, schema v4, action_log probe, data/, and four manifests PASS; five optional Skill data directories WARN because they do not exist). Output reports `read_only=true` and `persistent_changes=false`; temporary probes are removed and the action-log probe is rolled back.
 - [ ] Preview an enabled Skill action; confirm capability, effective risk, target paths, and approval requirement are displayed, and that preview does not execute the Skill.
@@ -103,6 +103,16 @@ Implementation is proposed in [PR #31 — diagnostics and action preview](https:
 - [ ] Verify the dashboard lists capability/risk summaries, last errors, and enable/disable controls. Partial check only: the owner confirmed all four built-in Skills appear installed and disabled by default; full controls and error-state behavior remain unverified.
 - [ ] Test enable/disable persistence across dashboard restart.
 - [ ] Confirm Python Skill code is treated as trusted local code, not an OS sandbox.
+
+
+### Phase 5 (AI Provider groundwork merged; feature work incomplete)
+
+- [x] PR #33 merged to main: Provider protocol, deterministic MockProvider, configuration-only provider stubs, ProviderRouter, strict ActionProposal schema, Core-owned Skill proposal routing, and default private-field redaction.
+- [x] PR #33 reports successful Windows CI run #61 (Ruff + pytest); tests use MockProvider and do not make live API requests.
+- [ ] Implement and test a real Provider client only after checking the current API terms, free quota, privacy policy, timeout behavior, and secret handling.
+- [ ] Implement Provider usage tracking and Budget Manager with per-provider limits, concurrency reservation, and hard stop.
+- [ ] Complete Core-owned L0-L3 routing and bounded AI Debate; neither may approve or execute around the Security Core.
+- [ ] Verify live API behavior separately from mock/CI tests. Do not put real API keys in repository files or test fixtures.
 
 ## Open questions / prerequisites
 - Before any OpenClaw integration decision: inspect the actual installed version, configuration, enabled tools/plugins/hooks, and all routes that could bypass MasterControl. No integration is authorized by this status document.
