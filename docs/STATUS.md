@@ -25,7 +25,7 @@ Not verified by this session: Windows toast/Discord notification delivery, telem
 - Workflow: `.github/workflows/ci.yml`.
 - Triggers: pull requests targeting `main`, and pushes to `main`.
 - Runner: GitHub-hosted `windows-latest`, Python 3.12.
-- Steps: install `requirements.txt`, run `ruff check .`, then `pytest -q`.
+- Steps: install `requirements.txt`, run the isolated demo (`python -m scripts.demo`), then `ruff check .` and `pytest -q`.
 - Tests use mocks; CI does not verify behavior on the owner's Windows PC. Target-machine behavior remains UNVERIFIED until the manual checks below are performed.
 
 ## Architecture and project decisions
