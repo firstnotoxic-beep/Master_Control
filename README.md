@@ -4,7 +4,7 @@
 
 ## How it works
 
-- **AI proposes:** เมื่อ AI Provider ถูกพัฒนาใน Phase 5 แล้ว AI จะส่ง structured proposal ไม่ใช่คำสั่งระบบอิสระ
+- **AI proposes:** เมื่อ live AI Provider พร้อมใช้งาน AI จะส่ง structured proposal ไม่ใช่คำสั่งระบบอิสระ
 - **Core governs:** Core ตรวจ schema และ permission, ขอ approval เมื่อจำเป็น, ส่งให้ executor ทำงาน, ตรวจผลจริง และบันทึก action log
 - **Skills extend locally:** Skills เป็น Python code ใน process เดียวกับ MasterControl ไม่ใช่ OS sandbox; capability tags เป็น metadata ไม่ใช่การแยกสิทธิ์ของระบบปฏิบัติการ
 - **Agent Runtime is conditional:** OpenClaw เป็นเพียงตัวเลือก Runtime ที่ต้องผ่าน Security Decision Gate; Discord เป็นช่องทางสื่อสารและ approval แยกต่างหาก
@@ -19,9 +19,9 @@
 - **Phase 5 — AI groundwork:** PR #33 merged; มี Provider protocol, MockProvider, disabled stubs, ActionProposal และ privacy redaction แต่ยังไม่มี live API clients, Budget Manager หรือ AI Debate
 - **Phases 4.6–4.7 และ 6–10:** เป็นงานตาม Roadmap; ยังไม่ถือว่า implement แล้ว
 - **CI:** GitHub-hosted Windows runner, Python 3.12; รัน isolated demo, Ruff และ pytest โดย tests ใช้ mocks ไม่ใช่การทดสอบบนเครื่อง Windows ของเจ้าของ
-- **Skills:** \`quick_note\`, \`task_list\`, \`brain_dump\`, \`daily_report\`; opt-in และปิดไว้โดยค่าเริ่มต้น
+- **Skills:** quick_note, task_list, brain_dump และ daily_report; opt-in และปิดไว้โดยค่าเริ่มต้น
 
-เริ่มใช้งานด้วย [Windows Quickstart](docs/QUICKSTART.md) (เอกสารนี้เพิ่มใน PR แยก) และตรวจสถานะจริงจาก [STATUS](docs/STATUS.md) ก่อนใช้งาน
+เริ่มใช้งานด้วย [Windows Quickstart](docs/QUICKSTART.md) และตรวจสถานะจริงจาก [STATUS](docs/STATUS.md) ก่อนใช้งาน
 
 ## Roadmap
 
