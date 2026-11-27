@@ -3,6 +3,8 @@ import json
 import shutil
 from pathlib import Path
 
+import pytest
+
 from core import diagnostics
 from core.db import fetch_one, init_db
 
@@ -106,12 +108,24 @@ def test_diagnostics_cli_returns_json_without_migrating_database(tmp_path, capsy
     assert result["persistent_changes"] is False
 
 
-def test_diagnostics_cli_previews_enabled_action_without_running_it(tmp_path, monkeypatch, capsys):
+@pytest.mark.parametrize(
+    ("capability", "risk", "approval_required"),
+    [("file_write", "SAFE", False), ("system_setting", "HIGH", True)],
+)
+def test_diagnostics_cli_previews_without_importing_skills_or_writing_db(
+    tmp_path, monkeypatch, capsys, capability, risk, approval_required,
+):
     source = Path(__file__).resolve().parents[1] / "skills" / "quick_note"
     monkeypatch.chdir(tmp_path)
     shutil.copytree(source, Path("skills/quick_note"))
     Path("config").mkdir()
     Path("config/skills.toml").write_text('enabled = ["quick_note"]\n', encoding="utf-8")
+    manifest_path = Path("skills/quick_note/skill.toml")
+    manifest = manifest_path.read_text(encoding="utf-8")
+    manifest_path.write_text(manifest.replace('"file_write"', f'"{capability}"'), encoding="utf-8")
+    module_path = Path("skills/quick_note/skill.py")
+    with module_path.open("a", encoding="utf-8") as module:
+        module.write('\nPath("imported.txt").touch()\n')
     database = tmp_path / "data" / "mastercontrol.db"
     arguments = json.dumps({"filename": "preview.md", "title": "Preview", "body": "Test"})
 
@@ -120,10 +134,32 @@ def test_diagnostics_cli_previews_enabled_action_without_running_it(tmp_path, mo
     assert exit_code == 0
     assert json.loads(capsys.readouterr().out) == {
         "action": "skill.quick_note.save",
-        "capabilities": ["file_write"],
-        "risk": "SAFE",
+        "capabilities": [capability],
+        "risk": risk,
         "target_paths": ["data/notes/{filename}"],
-        "approval_required": False,
+        "approval_required": approval_required,
     }
     assert not Path("data/notes/preview.md").exists()
-    assert fetch_one("SELECT COUNT(*) AS count FROM action_log", db_path=database)["count"] == 0
+    assert not Path("imported.txt").exists()
+    assert not database.parent.exists()
+
+
+@pytest.mark.parametrize(
+    ("config", "payload", "error"),
+    [
+        ('enabled = []\n', '{}', "skill is not enabled"),
+        ('enabled = ["task_list"]\n', '{"extra": true}', "invalid action parameters"),
+    ],
+)
+def test_diagnostics_cli_rejects_disabled_skills_and_invalid_arguments(
+    tmp_path, monkeypatch, capsys, config, payload, error,
+):
+    source = Path(__file__).resolve().parents[1] / "skills" / "task_list"
+    monkeypatch.chdir(tmp_path)
+    shutil.copytree(source, Path("skills/task_list"))
+    Path("config").mkdir()
+    Path("config/skills.toml").write_text(config, encoding="utf-8")
+
+    assert diagnostics.main(["preview", "task_list.list", payload]) == 1
+    assert error in capsys.readouterr().err
+    assert not Path("data").exists()

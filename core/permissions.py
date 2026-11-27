@@ -51,5 +51,8 @@ def unregister_skill_actions(prefix: str) -> None:
 def risk_for_action(action: str) -> RiskLevel:
     return ACTION_RISK.get(action, RiskLevel.HIGH)
 
+def risk_requires_approval(risk: RiskLevel) -> bool:
+    return risk in {RiskLevel.MEDIUM, RiskLevel.HIGH, RiskLevel.CRITICAL}
+
 def requires_approval(action: str) -> bool:
-    return risk_for_action(action) in {RiskLevel.MEDIUM, RiskLevel.HIGH, RiskLevel.CRITICAL}
+    return risk_requires_approval(risk_for_action(action))
