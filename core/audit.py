@@ -53,7 +53,8 @@ def query_action_log(
     if skill:
         if not isinstance(skill, str) or not _SKILL_PATTERN.fullmatch(skill):
             raise ValueError("skill filter must be a valid Skill name")
-        skill_pattern = f"skill.{skill}.%"
+        escaped_skill = skill.replace("_", "!_")
+        skill_pattern = f"skill.{escaped_skill}.%"
 
     result_filter = None
     if result:
@@ -69,7 +70,7 @@ def query_action_log(
         FROM action_log
         WHERE (? IS NULL OR created_at >= ?)
           AND (? IS NULL OR created_at < ?)
-          AND (? IS NULL OR action LIKE ?)
+          AND (? IS NULL OR action LIKE ? ESCAPE '!')
           AND (? IS NULL OR status = ?)
         ORDER BY created_at DESC, id DESC
         LIMIT ?

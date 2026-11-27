@@ -1,5 +1,7 @@
 # ทดสอบ diagnostics แบบไม่แก้ไขข้อมูลถาวร
 import json
+import shutil
+from pathlib import Path
 
 from core import diagnostics
 from core.db import fetch_one, init_db
@@ -102,3 +104,26 @@ def test_diagnostics_cli_returns_json_without_migrating_database(tmp_path, capsy
     assert exit_code == 0
     assert result["read_only"] is True
     assert result["persistent_changes"] is False
+
+
+def test_diagnostics_cli_previews_enabled_action_without_running_it(tmp_path, monkeypatch, capsys):
+    source = Path(__file__).resolve().parents[1] / "skills" / "quick_note"
+    monkeypatch.chdir(tmp_path)
+    shutil.copytree(source, Path("skills/quick_note"))
+    Path("config").mkdir()
+    Path("config/skills.toml").write_text('enabled = ["quick_note"]\n', encoding="utf-8")
+    database = tmp_path / "data" / "mastercontrol.db"
+    arguments = json.dumps({"filename": "preview.md", "title": "Preview", "body": "Test"})
+
+    exit_code = diagnostics.main(["preview", "quick_note.save", arguments, "--db", str(database)])
+
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "action": "skill.quick_note.save",
+        "capabilities": ["file_write"],
+        "risk": "SAFE",
+        "target_paths": ["data/notes/{filename}"],
+        "approval_required": False,
+    }
+    assert not Path("data/notes/preview.md").exists()
+    assert fetch_one("SELECT COUNT(*) AS count FROM action_log", db_path=database)["count"] == 0

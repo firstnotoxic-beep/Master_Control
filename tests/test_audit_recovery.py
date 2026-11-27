@@ -1,6 +1,7 @@
 # ทดสอบ Audit Timeline, config recovery และ failure handling
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -99,6 +100,32 @@ def test_audit_rejects_invalid_date_skill_and_unbounded_limit(tmp_path):
         query_action_log(database, limit=10_000)
 
 
+def test_audit_matches_literal_skill_name_and_limits_newest_rows(tmp_path):
+    database = tmp_path / "audit.db"
+    init_db(database)
+    for action, created_at in (
+        ("skill.task_list.add", "2026-11-01 10:00:00"),
+        ("skill.task_list.list", "2026-11-01 11:00:00"),
+        ("skill.taskxlist.list", "2026-11-01 12:00:00"),
+        ("skill.task_list.remove", "2026-11-02 00:00:00"),
+    ):
+        execute(
+            """
+            INSERT INTO action_log (action, details, risk_level, status, actor, created_at)
+            VALUES (?, '', 'LOW', 'completed', 'skill', ?)
+            """,
+            (action, created_at),
+            database,
+        )
+
+    rows = query_action_log(
+        database, date_from="2026-11-01", date_to="2026-11-01",
+        skill="task_list", result="completed", limit=1,
+    )
+
+    assert [row["action"] for row in rows] == ["skill.task_list.list"]
+
+
 def test_config_backup_restore_requires_high_approval_and_saves_rollback(tmp_path):
     config_dir = tmp_path / "config"
     config_dir.mkdir()
@@ -107,8 +134,11 @@ def test_config_backup_restore_requires_high_approval_and_saves_rollback(tmp_pat
     )
     database = tmp_path / "mastercontrol.db"
     backup_dir = tmp_path / "data" / "backups"
+    (tmp_path / ".env").write_text("DEMO_VALUE=fixture\n", encoding="utf-8")
+    (config_dir / ".env").write_text("DEMO_VALUE=fixture\n", encoding="utf-8")
 
     backup = create_config_backup(config_dir, backup_dir)
+    assert set(json.loads(backup.read_text(encoding="utf-8"))["files"]) == {"skills.toml"}
     (config_dir / "skills.toml").write_text("enabled = []\n", encoding="utf-8")
     approval_id = request_config_restore(backup.name, database, backup_dir)
 
@@ -127,7 +157,9 @@ def test_config_backup_restore_requires_high_approval_and_saves_rollback(tmp_pat
     assert (config_dir / "skills.toml").read_text(encoding="utf-8") == 'enabled = ["quick_note"]\n'
     rollback = backup_dir / restored["rollback_backup"]
     assert rollback.is_file()
-    assert 'enabled = []' in rollback.read_text(encoding="utf-8")
+    rollback_files = json.loads(rollback.read_text(encoding="utf-8"))["files"]
+    assert set(rollback_files) == {"skills.toml"}
+    assert rollback_files["skills.toml"]["content"] == "enabled = []\n"
 
 
 def test_config_restore_rejects_corrupt_backup_before_requesting_approval(tmp_path):
