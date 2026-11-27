@@ -28,6 +28,7 @@ from core.permissions import (
     register_skill_action,
     requires_approval,
     risk_for_action,
+    risk_requires_approval,
     unregister_skill_actions,
 )
 
@@ -137,6 +138,94 @@ class PreparedSkillAction:
         )
 
 
+def _read_enabled_names(config_path: Path) -> list[str]:
+    try:
+        with config_path.open("rb") as config_file:
+            config = tomllib.load(config_file)
+    except FileNotFoundError:
+        return []
+    names = config.get("enabled", [])
+    if not isinstance(names, list) or any(
+        not isinstance(name, str) or not _NAME_PATTERN.fullmatch(name)
+        for name in names
+    ):
+        raise ValueError("config/skills.toml must contain enabled = [skill names]")
+    return sorted(set(names))
+
+
+def find_skill_folders(skills_dir: Path) -> dict[str, Path]:
+    if not skills_dir.exists():
+        return {}
+    folders: dict[str, Path] = {}
+    for folder in skills_dir.iterdir():
+        if (
+            folder.is_dir()
+            and not folder.is_symlink()
+            and _NAME_PATTERN.fullmatch(folder.name)
+        ):
+            folders[folder.name] = folder
+    return folders
+
+def read_skill_manifest(name: str, directory: Path) -> SkillManifest:
+    if not directory.is_dir() or directory.is_symlink():
+        raise FileNotFoundError(f"skill folder not found: {name}")
+    manifest_path = directory / "skill.toml"
+    with manifest_path.open("rb") as manifest_file:
+        raw = tomllib.load(manifest_file)
+    manifest = SkillManifest.model_validate(raw)
+    if manifest.name != name:
+        raise ValueError("manifest name must match its folder name")
+    if manifest.enabled_by_default is not False:
+        raise ValueError("enabled-by-default must be false")
+    return manifest
+
+
+def _validate_manifest_action(
+    manifest: SkillManifest, action_id: str, payload: dict[str, Any]
+) -> tuple[SkillActionManifest, BaseModel]:
+    action = next((item for item in manifest.actions if item.id == action_id), None)
+    if action is None:
+        raise ValueError(f"unknown action: {manifest.name}.{action_id}")
+    if not isinstance(payload, dict):
+        raise TypeError("action arguments must be a JSON object")
+    fields = {
+        key: (_PARAM_TYPES[field_type], ...)
+        for key, field_type in action.params.items()
+    }
+    params_model = create_model(
+        f"{manifest.name}_{action.id}_Params",
+        __config__=ConfigDict(extra="forbid"),
+        **fields,
+    )
+    try:
+        return action, params_model.model_validate(payload)
+    except ValidationError as error:
+        raise ValueError(f"invalid action parameters: {error}") from error
+
+
+def preview_configured_skill_action(
+    skill_name: str, action_id: str, payload: dict[str, Any]
+) -> dict[str, Any]:
+    """Preview an enabled Skill from its manifest without loading Python or opening SQLite."""
+    if skill_name not in _read_enabled_names(DEFAULT_CONFIG_PATH):
+        raise ValueError(f"skill is not enabled: {skill_name}")
+    directory = find_skill_folders(DEFAULT_SKILLS_DIR).get(skill_name)
+    if directory is None:
+        raise FileNotFoundError(f"skill folder not found: {skill_name}")
+    manifest = read_skill_manifest(skill_name, directory)
+    if not (directory / "skill.py").is_file():
+        raise FileNotFoundError(f"skill.py not found for {skill_name}")
+    action, _params = _validate_manifest_action(manifest, action_id, payload)
+    risk = minimum_risk_for_capabilities(action.capabilities, action.risk)
+    return {
+        "action": f"skill.{skill_name}.{action_id}",
+        "capabilities": list(action.capabilities),
+        "risk": risk.value,
+        "target_paths": list(action.target_paths),
+        "approval_required": risk_requires_approval(risk),
+    }
+
+
 class SkillRegistry:
     """Loads only explicitly enabled, locally installed skills."""
 
@@ -155,18 +244,8 @@ class SkillRegistry:
         self.refresh()
 
     def _enabled_names(self) -> list[str]:
-        if not self.config_path.exists():
-            return []
         try:
-            with self.config_path.open("rb") as config_file:
-                config = tomllib.load(config_file)
-            names = config.get("enabled", [])
-            if not isinstance(names, list) or any(
-                not isinstance(name, str) or not _NAME_PATTERN.fullmatch(name)
-                for name in names
-            ):
-                raise ValueError("config/skills.toml must contain enabled = [skill names]")
-            return sorted(set(names))
+            return _read_enabled_names(self.config_path)
         except (OSError, tomllib.TOMLDecodeError, ValueError) as error:
             LOGGER.error("Cannot read skills config %s: %s", self.config_path, error)
             self._errors["<config>"] = str(error)
@@ -181,34 +260,13 @@ class SkillRegistry:
         lines.append("]")
         self.config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    def _skill_folders(self) -> dict[str, Path]:
-        if not self.skills_dir.exists():
-            return {}
-        folders: dict[str, Path] = {}
-        for folder in self.skills_dir.iterdir():
-            if (
-                folder.is_dir()
-                and not folder.is_symlink()
-                and _NAME_PATTERN.fullmatch(folder.name)
-            ):
-                folders[folder.name] = folder
-        return folders
-
     def _read_manifest(self, name: str, folder: Path | None = None) -> SkillManifest:
         if not _NAME_PATTERN.fullmatch(name):
             raise ValueError("invalid skill name")
-        directory = folder or self._skill_folders().get(name)
+        directory = folder or find_skill_folders(self.skills_dir).get(name)
         if directory is None or directory.is_symlink():
             raise FileNotFoundError(f"skill folder not found: {name}")
-        manifest_path = directory / "skill.toml"
-        with manifest_path.open("rb") as manifest_file:
-            raw = tomllib.load(manifest_file)
-        manifest = SkillManifest.model_validate(raw)
-        if manifest.name != name:
-            raise ValueError("manifest name must match its folder name")
-        if manifest.enabled_by_default is not False:
-            raise ValueError("enabled-by-default must be false")
-        return manifest
+        return read_skill_manifest(name, directory)
 
     def _set_state(
         self,
@@ -260,7 +318,7 @@ class SkillRegistry:
         self._loaded.clear()
         self._errors = {}
         enabled_names = set(self._enabled_names())
-        folders = self._skill_folders()
+        folders = find_skill_folders(self.skills_dir)
 
         for name, folder in folders.items():
             if name not in enabled_names:
@@ -314,8 +372,7 @@ class SkillRegistry:
                     "final_risk": final_risk.value,
                     "risk_raised": final_risk != action.risk,
                     "target_paths": list(action.target_paths),
-                    "approval_required": final_risk
-                    in {RiskLevel.MEDIUM, RiskLevel.HIGH, RiskLevel.CRITICAL},
+                    "approval_required": risk_requires_approval(final_risk),
                 }
             )
         return {
@@ -346,7 +403,7 @@ class SkillRegistry:
             for row in fetch_all("SELECT * FROM skill_state", db_path=self.db_path)
         }
         items: list[dict[str, Any]] = []
-        for name, folder in sorted(self._skill_folders().items()):
+        for name, folder in sorted(find_skill_folders(self.skills_dir).items()):
             row = state_rows.get(name, {})
             try:
                 preview = self.preview(name)
@@ -560,24 +617,7 @@ class SkillRegistry:
         if loaded is None:
             raise ValueError(f"skill is not enabled or did not load: {skill_name}")
         manifest, _module = loaded
-        action = next((item for item in manifest.actions if item.id == action_id), None)
-        if action is None:
-            raise ValueError(f"unknown action: {skill_name}.{action_id}")
-        if not isinstance(payload, dict):
-            raise TypeError("action arguments must be a JSON object")
-        fields = {
-            key: (_PARAM_TYPES[field_type], ...)
-            for key, field_type in action.params.items()
-        }
-        params_model = create_model(
-            f"{manifest.name}_{action.id}_Params",
-            __config__=ConfigDict(extra="forbid"),
-            **fields,
-        )
-        try:
-            params = params_model.model_validate(payload)
-        except ValidationError as error:
-            raise ValueError(f"invalid action parameters: {error}") from error
+        action, params = _validate_manifest_action(manifest, action_id, payload)
         action_key = f"skill.{skill_name}.{action_id}"
         final_risk = minimum_risk_for_capabilities(action.capabilities, action.risk)
         if risk_for_action(action_key) != final_risk:

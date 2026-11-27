@@ -13,7 +13,12 @@ from pathlib import Path
 from typing import Any
 
 from core.db import DEFAULT_DB_PATH, SCHEMA_VERSION
-from core.skills import DEFAULT_SKILLS_DIR, SkillRegistry
+from core.skills import (
+    DEFAULT_SKILLS_DIR,
+    find_skill_folders,
+    preview_configured_skill_action,
+    read_skill_manifest,
+)
 
 
 def _is_link_or_reparse(path: Path) -> bool:
@@ -148,19 +153,17 @@ def _check_data_directories(
 def _check_skill_manifests(
     skills_dir: Path, checks: list[dict[str, str]]
 ) -> None:
-    registry = object.__new__(SkillRegistry)
-    registry.skills_dir = skills_dir
     if not skills_dir.is_dir():
         _append_check(checks, "skill_manifests", "WARN", f"Skills directory not found: {skills_dir}")
         return
-    folders = registry._skill_folders()
+    folders = find_skill_folders(skills_dir)
     if not folders:
         _append_check(checks, "skill_manifests", "WARN", "No installed Skill folders found")
         return
 
     for name, folder in sorted(folders.items()):
         try:
-            manifest = registry._read_manifest(name, folder)
+            manifest = read_skill_manifest(name, folder)
         except (OSError, TypeError, ValueError, tomllib.TOMLDecodeError) as error:
             _append_check(checks, f"skill_manifest:{name}", "WARN", f"Invalid manifest: {error}")
         else:
@@ -198,17 +201,14 @@ def run_diagnostics(
     }
 
 
-def _run_action_preview(
-    action: str, arguments: str, db_path: Path
-) -> dict[str, Any]:
+def _run_action_preview(action: str, arguments: str) -> dict[str, Any]:
     if action.count(".") != 1:
         raise ValueError("Use preview <skill>.<action> [JSON object]")
     skill_name, action_id = action.split(".", 1)
     payload = json.loads(arguments) if arguments.strip() else {}
     if not isinstance(payload, dict):
         raise TypeError("Preview arguments must be a JSON object")
-    registry = SkillRegistry(db_path=db_path)
-    return registry.preview_action(skill_name, action_id, payload)
+    return preview_configured_skill_action(skill_name, action_id, payload)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -221,10 +221,10 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--skills-dir", type=Path, default=DEFAULT_SKILLS_DIR)
     check.add_argument("--data-dir", type=Path, default=Path("data"))
 
-    preview = subparsers.add_parser("preview", help="Preview a loaded Skill action without executing it")
+    preview = subparsers.add_parser("preview", help="Preview an enabled Skill action from its manifest")
     preview.add_argument("action", help="Skill action key, e.g. quick_note.save")
     preview.add_argument("arguments", nargs="?", default="{}")
-    preview.add_argument("--db", type=Path, default=DEFAULT_DB_PATH)
+    preview.add_argument("--db", type=Path, help="Compatibility option. Preview does not use SQLite.")
     return parser
 
 
@@ -237,7 +237,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         if args.command == "preview":
-            result = _run_action_preview(args.action, args.arguments, args.db)
+            result = _run_action_preview(args.action, args.arguments)
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
         if args.command == "check":
